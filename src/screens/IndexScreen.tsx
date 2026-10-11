@@ -6,8 +6,8 @@ import { Body, Label, Micro } from '../components/Type';
 import { WaitDot } from '../components/WaitDot';
 import type { PrsState } from '../hooks/useOpenPrs';
 import { prAge, type PullRequest } from '../lib/prs';
-import { colors, radii, themed } from '../theme';
-import { Page, ScreenHead } from './shared';
+import { colors, themed } from '../theme';
+import { Block, Chips, ScreenHead } from './shared';
 
 /** One empty list for every render without data, so memos keyed on it hold. */
 const NO_PRS: PullRequest[] = [];
@@ -38,29 +38,20 @@ export function IndexScreen({
   );
   const folders = useMemo(() => byRepo(rows), [rows]);
 
+  const drafts = all.filter((pr) => pr.draft).length;
+
   return (
-    <Page>
+    <Block>
       <ScreenHead left="pull requests" right={`${all.length} yours`} />
 
-      <View style={styles.tabs}>
-        {(['open', 'draft'] as const).map((value) => {
-          const count = all.filter((pr) => (value === 'open' ? !pr.draft : pr.draft)).length;
-          const on = filter === value;
-          return (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityState={{ selected: on }}
-              key={value}
-              onPress={() => setFilter(value)}
-              style={[styles.chip, on && styles.chipOn]}
-            >
-              <Label style={on ? styles.chipLabelOn : styles.chipLabel}>
-                {value} {count}
-              </Label>
-            </Pressable>
-          );
-        })}
-      </View>
+      <Chips
+        current={filter}
+        items={[
+          { key: 'open', label: `open ${all.length - drafts}` },
+          { key: 'draft', label: `draft ${drafts}` },
+        ]}
+        onSelect={setFilter}
+      />
 
       {state.status === 'loading' && <Label style={styles.note}>reading the drawer…</Label>}
       {state.status === 'error' && <Body style={styles.error}>could not load pull requests</Body>}
@@ -81,7 +72,7 @@ export function IndexScreen({
           ))}
         </Card>
       ))}
-    </Page>
+    </Block>
   );
 }
 
@@ -138,28 +129,6 @@ function Row({
 
 const styles = themed(() =>
   StyleSheet.create({
-    tabs: {
-      flexDirection: 'row',
-      gap: 6,
-      marginBottom: 4,
-    },
-    chip: {
-      borderColor: colors.hairStrong,
-      borderRadius: radii.pill,
-      borderWidth: 1,
-      paddingHorizontal: 14,
-      paddingVertical: 6,
-    },
-    chipOn: {
-      backgroundColor: colors.black,
-      borderColor: colors.black,
-    },
-    chipLabel: {
-      color: colors.ink,
-    },
-    chipLabelOn: {
-      color: colors.onBlack,
-    },
     folder: {
       paddingBottom: 4,
     },
@@ -206,12 +175,12 @@ const styles = themed(() =>
       color: colors.ink40,
     },
     note: {
-      marginTop: 18,
+      paddingVertical: 12,
       textAlign: 'center',
     },
     error: {
       color: colors.no,
-      marginTop: 18,
+      paddingVertical: 12,
       textAlign: 'center',
     },
   }),

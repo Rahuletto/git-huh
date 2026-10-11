@@ -83,11 +83,14 @@ padding 18. A screen is a stack of cards with 10pt between them.
 
 Screens are numbered by the pin they come from, **not** by where they sit in
 the app — the sections and their order are under "Navigation" below, and
-`STORIES.md` is the argument for that grouping. `hey` is still the entry
-screen: `today · you`.
+`STORIES.md` is the argument for that grouping. Most of them are now **blocks**
+on a section's page rather than screens of their own (a section is one page;
+see Navigation), but each keeps its pin's layout and its head. `hey` is still
+what opens the app: the top of `today`.
 
 ### 1. `hey` — pin04 (Pantom)
-`hey,` in `ink40` over `~{login}`, both display. Then **the widget itself**, on its card:
+`hey,` in `ink40` over `~{login}`, both display, with `share` (the year as a 4:3
+card) at the right of `hey,`. Then **the widget itself**, on its card:
 the travelling strip of your commit messages and the last few months as the widget's
 field at its own pitch (7 rows, up to 21pt a dot), today the plus in the corner.
 Then one sentence in body 15/24, the words `ink70` and every figure in full ink, medium:
@@ -97,8 +100,9 @@ else. you work most on {weekday}s, and your longest run was {streak} days in a r
 figures (stars, followers) stay out. Then the aside `since {year} · {activeDays} active
 days · {n} day streak`.
 
-Then **the feed**: a mono head naming what it lists (`pr comments` by default) with
-`change` on the right, and the rows as feed cards. It starts with the inbox's own feed
+**The feed is the last block on `today`**, after `now` and `hours`, because it has no
+end: a mono head naming what it lists (`pr comments` by default) with `change` on the
+right, and the rows as feed cards. It starts with the inbox's own feed
 and **keeps going**: scrolling within a screen of the bottom pages in older history —
 `fetchSocialPage`, ten of your pull requests at a time, open or not, newest activity
 first, the last twenty comments and ten reviews of each (`useFeedHistory`). The inbox's
@@ -109,11 +113,14 @@ screenful. The foot says which it is: `reading older pull requests…`, `older �
 page (`lib/home.ts`).
 
 ### 2. `now` — pin02 (Ai OS)
-Three cards. **today**: the count set in the widget's dots — lit cells are peak dots, the
-rest the grid's ghost (two paths), captioned `contributions so far today`, with
-`yesterday · best` as the card's figure. Then two half cards: **this week** (the last
-seven days as a `DotRow` with weekday initials, today the plus) and **languages** (the
-top four, name and share). Then **last 30 days** as one `DotRow`, a week of nothing a wave.
+The `today` block, under the head `today` / `{weekday, month day}`. **The count** set in
+the widget's dots — lit cells are peak dots, the rest the grid's ghost (two paths),
+captioned `contributions so far today`, with `yesterday · best` as the card's figure.
+Then **the weather** card (6, below). Then two half cards: **last 7 days** (a `DotRow`
+with weekday initials, today the plus) and **languages** (the top four, name and
+share). Then **last 30 days** as one `DotRow`, a week of nothing a wave. `now` and
+`weather` used to be two views and drew today's count and the week twice; they are
+one block.
 
 ### 3. `flow` — pin05 (Sankey)
 Title row `where it went` / `last 12 months`, the chart on a card with `100%` and the
@@ -129,8 +136,10 @@ The second stage belongs to **the commits band alone**: `commitContributionsByRe
 counts commits, so the repositories hang off the commits band and are scaled to it.
 
 ### 4. `poster` — pin09 (IBM)
-**Full page**: the year and `week by week` across the top, the chart taking every point
-left over (measured with `onLayout`), the caption and the year chips at the foot.
+The first block of `year`: the head `{year}, week by week` with `share` (which opens on
+the year the poster is showing), the chart on a card at a fixed 300pt — it used to take
+the whole page, which a page of five blocks cannot give it — the caption under it, and
+the year chips below the card.
 One column per week, each a stack of the widget's dots rising from the baseline; the top
 30% dissolves into a rain of smaller, fainter ones drifting by a fraction of a dot. The
 busiest week's column is at full weight, the rest a step back. One path per weight.
@@ -144,19 +153,28 @@ The spiral on a card, the legend on another. **One spiral** that *breaks* around
 mark on it; rank 0 at the outer end. The top six languages are the widget's dots with
 the language's devicon mark cut out of them in `onBlack` — the first squared off, as a
 peak is — weighted by rank. The rest are the mark in ink. **The spiral turns**, one
-revolution every fifty seconds, parked off screen. Legend rows are a round chip holding
+revolution every fifty seconds, on the native driver: the spiral is drawn once and the
+view holding it rotates, every mark in its own small canvas turning back against it so
+it stays upright. It used to be a JavaScript frame loop redrawing the SVG, which on a
+page that scrolls stuttered the scroll. Parked while `year` is not on screen. Names are
+lower case, like everything else. Legend rows are a round chip holding
 the mark, the name and the share. GitHub's language colours are not drawn anywhere.
 
 ### 6. `weather` — pin07 (weather gradients)
-Centered: `~{login}`, the date, a condition — `severe shipping expected` (streak ≥ 7),
-`steady output`, `quiet and overcast`. Hero: the thin numeral, today's count, `today`
-beside it; `high {bestDay}` `low {avgPerDay}` under it. A card of three readings with
-hairline glyphs — velocity (the arrow **follows the sign**), consistency, pace — and a
-card of the last seven days as a `DotRow`.
-The sky is **a field of dots rising from the bottom of the page** instead of a gradient:
+A card inside the `today` block: `weather` / `{n} day streak`, a condition as a title —
+`severe shipping expected` (streak ≥ 7), `steady output`, `quiet and overcast` — and
+`high {bestDay} · average {avgPerDay} a day` under it (it said `low` over the average
+once; the low of a year is always nought). Three readings with hairline glyphs:
+**the last seven days against the seven before** (the arrow **follows the sign**;
+rolling, not the calendar week, which on a Sunday is one day old and read as a
+collapse), **active days** (the share of days that have happened with work in them),
+and **longest run**. Today's count and the week are the `now` cards around it, not
+repeated here.
+The sky is **a strip of dots rising from the foot of the card** instead of a gradient:
 how high it climbs and how bright it gets is the current streak, seeded so the same
-streak is the same sky. It is coarse on purpose (a dot every 19pt): at 13pt the path
-was big enough to make the x86_64 emulator's launch crash (see the SVG trap in
+streak is the same sky. Whole dots only, centred, inside the card's padding, under
+nothing. Coarse on purpose (a dot every 15pt over 76pt): the full-page sky at 13pt was
+big enough to make the x86_64 emulator's launch crash (see the SVG trap in
 `CLAUDE.md`) four times in six.
 
 ### 7. `cards` — pin08 (urbit)
@@ -224,9 +242,14 @@ subjects.
 
 ### 12. `brief` — pin03's card, opened
 
-pin03's filing card with the lid off: `the brief` / `1 / 5`, one pull request's cover on a card
-(the number, a `StateChip`, the title, `DiffDots`, counts, labels as outlined pills) and then its
-description under a wavy rule.
+On the `work` page, a block: `the brief` / `{n} descriptions`, the newest pull request's
+cover on a card (the number, a `StateChip`, the title, `DiffDots`, counts, labels as
+outlined pills) and the first lines of its description — tapping it opens `pull` — then
+`read all {n} in order →`, which pushes the reader.
+
+The reader is pushed over everything (`work · the brief` in its frame): the same cover,
+then the description under a wavy rule. Where you are is said **once**, in the bar at
+the foot; it also used to sit in a masthead above, which was the same `1 / 5` twice.
 
 The description is **rendered, not printed** (`components/Markdown`). GitHub hands back raw
 Markdown, and verbatim a heading arrives as a literal `## Problem` and a list as a column of
@@ -237,14 +260,24 @@ Headings are underlined with a wave; so is `The description`.
 
 Paging lives in a **bar pinned to the bottom** (`← prev · n of N · next →`), so `next` is in the
 same place on every pull request. Under the description it would sit below the fold on a long
-body and halfway up the screen on a one-liner.
+body and halfway up the screen on a one-liner. Paging returns the reader to the top.
+
+### 12a. `cycle` — pin10's rows, for pull requests
+
+A block on `work`: `how long it took` / `{n} merged`, three figures on tiles (median
+cycle, median wait for a first review, merge rate), then one card with a row per merged
+pull request, oldest first: `#{n}` on the left, a run of the widget's dots from open to
+merge, a ring where the first review landed, a dashed median carried down every row
+(each row is five whole dashes tall, so the rows join), and the time it took on the
+right. A row slower than the median is in full ink with its last dot squared. **Each
+row says which pull request it is and opens it** — the key used to be a second card
+under the chart, matched to it by counting rows.
 
 ### 13. `pull` — a pull request, opened
 
-Not a page in the rail: a full-screen overlay pushed **over** the pager from `index` or `brief`,
-with its own back button and a `hardwareBackPress` handler. It sits over the pager rather than
-inside it because it has horizontal scrollers of its own, and nested in the pager every one of
-them would lose its drag to the page swipe.
+Not a section: a full-screen page pushed **over** the sections and the bar, from `pulls`,
+`brief`, `cycle`, the inbox or a link, with its own back button and a `hardwareBackPress`
+handler.
 
 Header: title, state chip, the proportional add/delete rule, and a stat row. Then three tabs —
 `the brief` (the description, same renderer), `talk`, `files` — and a footer with `open on
@@ -273,8 +306,16 @@ gets a readable conversation.
 
 ### 14. `inbox` — the feed, given a section
 
-pin04's feed, lifted out of the greeting and given the page. `ScreenHead`
-`what wants you` · `{n} events`, the wrapped chip filter
+The `inbox` page opens with **what wants you**: two `Tile`s side by side, `review` and
+`assigned` — the lists that are about you rather than about your work. Each is a count
+(`4 waiting on you`, `4 yours to do`), a `WaitDot` per item, longest wait first, so the
+one that has sat a month is visible before anything is opened, and a line of what
+matters (`oldest asked 1mo · 1 moved since you looked`; `1 overdue · quietest 1mo · 2
+you filed`). The whole tile opens its list in full (20 and 21, below). They were two
+tabs beside the feed, which hid both behind a label.
+
+Then the feed, pin04's, lifted out of the greeting: `ScreenHead` `recent` ·
+`{n} events`, the wrapped chip filter
 (`all · comments · reviews · mentions · yours`) with counts, and up to forty
 rows, each on its own card. One of the widget's marks per category — a dot for a
 comment, a ring for a review or a mention, a square for a review request, a
@@ -374,7 +415,8 @@ then the last forty lines in mono.
 ### 20. `review` — the queue, filed like pin03 (`inbox`)
 
 The review requests out of the inbox, on a page of their own and read from the
-front. `ScreenHead` `waiting on you` · `{n} to review`, chips `asked {n}` ·
+front — pushed from the inbox's `review` tile (`inbox · review` in its frame).
+`ScreenHead` `waiting on you` · `{n} to review`, chips `asked {n}` ·
 `reviewed {n} · {m} moved`.
 
 **asked**: a card named `the queue` with `oldest {age}` as its figure, holding one
@@ -398,6 +440,7 @@ is in `asked`, not here. Every row opens `pull`.
 
 ### 21. `assigned` — what is yours to do (`inbox`)
 
+Pushed from the inbox's `assigned` tile (`inbox · assigned` in its frame).
 `ScreenHead` `yours to do` · `{n} assigned`, chips `assigned {n}` · `filed {n}`
 (issues you opened that are still open), then `pulls`' drawer: one card per
 repository, its name and count across the top, the rows inside. A row is the title,
@@ -418,12 +461,15 @@ vanity figure.
 A card with the six busiest faces overlapping and one sentence: `5 people reviewed
 your pull requests and you reviewed 6 people's. most of it was with ~anna, who
 reviewed 23 of yours while you reviewed 18 of theirs.` Then `← reviewed yours` /
-`you reviewed theirs →` over a card per person, busiest first, up to twelve: picture,
+`you reviewed theirs →` over a card per person, busiest first — the first three on the
+`year` page, then `all {n} people →`, which pushes the rest (`year · people`), up to
+twelve: picture,
 handle, total; a **give-and-take rule** — a stretched dot to the left of a hairline
 for their reviews of yours (`ink70`), one to the right for yours of theirs (ink), each
 with its count, on **one scale across every card**; and the twelve months as a
-`DotRow` on the shared month window, three quiet months the wave, month initials on
-the last card only. A person counts once per pull request however many rounds it
+`DotRow` on the shared month window, three quiet months the wave, month initials (lower
+case) on the last card only. The scale is the twelve's, on the page and pushed alike, so
+a bar is the same length wherever it is drawn. A person counts once per pull request however many rounds it
 took. Bots and you are left out. The foot is the sample: `from your last 50 pull
 requests of 64 and all 38 you reviewed · bots left out`.
 
@@ -456,9 +502,10 @@ fails loudly, saved answer or not.
 
 ### The account page — the avatar, top right
 
-Every section's chrome is the wordmark on the left and, on the right, `share` (on a
-view that is a chart) and the account's picture in a circle — several overlapping when
-accounts are added together. Settings open from the corner on every phone; the avatar
+Every section's chrome is the wordmark on the left and, on the right, the account's
+picture in a circle — several overlapping when accounts are added together. (`share`
+used to sit here too; it is on each chart's own head now, next to the thing it
+shares.) Settings open from the corner on every phone; the avatar
 pushes **`account`** (`AccountScreen`) onto the stack.
 
 **accounts**: one row each, picture, `~login` and a mono line. The one in use carries a
@@ -473,7 +520,7 @@ read · left out of the charts` rather than taking the charts down. People with 
 account asked for this: neither profile alone is what they did. Then a dashed
 `+ add account` (the token form, with `cancel`) and `forget ~login` for the others.
 
-**on the you page**: the kinds the `you` feed lists, as chips.
+**at the foot of today**: the kinds the feed at the end of `today` lists, as chips.
 
 At the foot, filled `open github →` and outlined `disconnect ~login` (`exit
 demo`). `disconnect` forgets the current account and moves to the next one if the phone
@@ -489,21 +536,28 @@ with the app open is not repeated.
 
 ## Navigation
 
-**Five sections, a bar that is always visible, and a segmented control for
-the views inside a section.** No drawer, no hamburger, nothing behind a menu,
-and no scrolling list of thirteen names — which is a hamburger lying down.
-The shape follows Apple's Human Interface Guidelines: three to five
-persistent, labelled destinations that are *content* and not actions, with
-the second level as a segmented control at the top of the section it belongs
-to. `STORIES.md` is why the grouping is this grouping.
+**Five sections, a bar that is always visible, and each section one page.**
+No drawer, no hamburger, nothing behind a menu, and no scrolling list of
+thirteen names — which is a hamburger lying down. The shape follows Apple's
+Human Interface Guidelines: three to five persistent, labelled destinations
+that are *content* and not actions. `STORIES.md` is why the grouping is this
+grouping.
 
-| section | views (segmented control) | the question it answers |
-|---|---|---|
-| `today` | `you` · `now` · `weather` · `hours` | how am I doing |
-| `inbox` | `recent` · `review` · `assigned` | what wants me |
-| `work` | `pulls` · `brief` · `cycle` · `repos` | what am I shipping |
-| `year` | `weeks` · `split` · `languages` · `years` · `people` | what was the year |
-| `ideas` | `project ideas` | what could I build next |
+There is **no second row of tabs**. A section used to be a segmented control
+of three to five views over a horizontal pager — a tab bar inside a tab bar —
+which hid most of every section behind a label, made `now` and `weather` draw
+the same count and the same week twice, and put the inbox's swipe actions at
+war with the pager. Now each section is a page of **blocks** in reading order,
+each opened by its `ScreenHead`; a list too long for the page shows its head and
+pushes the rest.
+
+| section | the page, top to bottom | pushes | the question it answers |
+|---|---|---|---|
+| `today` | `you` · `today` (`now` + `weather`) · `hours` · the feed | — | how am I doing |
+| `inbox` | `review` and `assigned` tiles · `recent` | the queue, the assignments | what wants me |
+| `work` | `pulls` · `the brief` · `cycle` · `repos` | the brief, read in order | what am I shipping |
+| `year` | `weeks` · `split` · `languages` · `years` · `people` (three) | everyone | what was the year |
+| `ideas` | `project ideas` | — | what could I build next |
 
 - **Bar**: the system's own tab bar, through expo-router's `NativeTabs`
   (`app/(tabs)/_layout.tsx`). On iOS it is `UITabBarController` — Liquid Glass
@@ -514,39 +568,42 @@ to. `STORIES.md` is why the grouping is this grouping.
   never look like either system's. `inbox` carries a count of the events addressed to you (review
   requests, mentions, changes requested), which is the honest version of a
   badge: it is computed from the rows that are actually there.
-- **Segments** (`Segments`): mono labels, the selected one in full ink with the
-  app's wave under it — the widget's `repo ~~~ message` weights. Hidden when a section
-  has one view. The row **wraps, it never scrolls**.
-- **Swiping** moves between views *within* a section and stops at its edges,
-  so a drag never carries you three destinations away. **Except in `inbox`**,
-  which changes view from its segments alone (`swipe: false` in `sections.ts`):
-  its rows follow a finger sideways to be put away, and a pager claiming the
-  same drag would take every one of them.
-- **Sections keep their place.** Each remembers which view you left it on,
-  and mounts the first time it is opened rather than on launch, so nothing
-  is built before it is looked at. A mounted screen is memoised and redraws
-  only when its own data changes.
-- **Detail is a stack.** `pull`, `thread`, `repo`, `file`, `new issue`,
-  `account`, `share` and `add account` push over the sections and over each other, each with `←
-  back` and the system back button wired to pop the top. Lower pages stay
+- **Blocks** (`Block`, `ScreenHead` in `screens/shared.tsx`): a block's head and
+  its cards sit ten apart; blocks sit thirty-four apart, so the heads read as the
+  dividers. A block's one action — `share` on a chart, `change` on the feed — is a
+  small pill at the end of its head.
+- **Folded lists**: a `Tile` (`components/Tile.tsx`) is a list as one card — what it
+  is, how many, a `WaitDot` per item, a line of what matters — and opens the list;
+  `More` (`all 6 people →`) follows the first few rows of one. Either pushes the
+  whole list as a page of its own.
+- **Sections keep their place.** Each keeps its scroll, and mounts the first time it
+  is opened rather than on launch, so nothing is built before it is looked at. Each
+  block is memoised and redraws only when its own data changes. The heavy commit
+  history is asked for when `work` opens or when `today` is scrolled towards
+  `hours`, never on launch.
+- **Detail is a stack.** `pull`, `thread`, `repo`, `file`, `new issue`, the folded
+  lists (`queue`, `assigned`, `brief`, `people`), `account`, `share` and `add account`
+  push over the sections and over each other, each with `←
+  back` and the system back button wired to pop the top. A pushed page about one
+  thing may have views of it (`Segments` on `pull`): it covers the bar, so that row
+  is the only one on screen. Lower pages stay
   mounted, hidden, so back returns to them as they were. A github.com link
   anywhere in rendered Markdown opens the matching page on the stack instead
   of the browser. (`lib/nav.tsx`.)
 
-### Share — a view as a 4:3 image
+### Share — a chart as a 4:3 image
 
-`share` in the chrome, on any view that is a chart, pushes a preview of that view
-recomposed as a **4:3 card** (`ShareCard`, 640 × 480 points, captured at 1600 × 1200
+`share` on a chart's head pushes a preview of that chart recomposed as a **4:3 card** (`ShareCard`, 640 × 480 points, captured at 1600 × 1200
 PNG with react-native-view-shot and handed to the system share sheet with
 expo-sharing). A card is not a screenshot: a phone screen is portrait and scrolls, a
 timeline image is landscape and does neither. Every card is the same frame — wordmark
 and handle across the top, a light display title and one thin figure, the chart, and a line of
 fact with the month along the foot — so a run of them reads as a series.
 
-| views | card | chart |
+| `share` on | card | chart |
 |---|---|---|
-| `you` `now` `weather` | a year on github | four figures and the widget's field, eleven rows deep so a whole year fits |
-| `weeks` | {year}, week by week | the poster for one year (chips on the share page pick it) |
+| the greeting, top of `today` | a year on github | four figures and the widget's field, eleven rows deep so a whole year fits |
+| `weeks` | {year}, week by week | the poster for one year — the one on screen; chips on the share page pick another |
 | `split` | where the year went | one ruled bar and a legend with counts and shares |
 | `languages` | what I write in | six bars and an `other` |
 | `years` | every year on github | a column per year, the last twelve |

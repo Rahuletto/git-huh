@@ -20,7 +20,7 @@ import { useNav } from '../lib/nav';
 import { searchCode } from '../lib/repo';
 import { colors, radii, themed } from '../theme';
 import { SearchField, SearchResults } from './RepoScreen';
-import { ago, fmt, hash, Page, ScreenHead } from './shared';
+import { ago, Block, fmt, hash, ScreenHead } from './shared';
 
 const CARD_HEIGHT = 168;
 const CHART_HEIGHT = 30;
@@ -81,7 +81,7 @@ export function CardsScreen({
   );
 
   return (
-    <Page>
+    <Block>
       <ScreenHead left="repositories" right={`${fmt(model.repoCount)} owned`} />
 
       <SearchField
@@ -111,7 +111,7 @@ export function CardsScreen({
         ))}
         {model.repos.length === 0 && <Label>no repositories to show</Label>}
       </View>
-    </Page>
+    </Block>
   );
 }
 
@@ -201,7 +201,7 @@ function RepoCard({
         {repo.language && (
           <View style={styles.langRow}>
             <LanguageChip name={repo.language.name} size={16} />
-            <Data style={styles.metaText}>{repo.language.name}</Data>
+            <Data style={styles.metaText}>{repo.language.name.toLowerCase()}</Data>
           </View>
         )}
         <Data style={styles.metaText}>
@@ -284,8 +284,8 @@ const styles = themed(() =>
   StyleSheet.create({
     deck: {
       alignItems: 'center',
-      paddingBottom: 30,
-      paddingTop: 14,
+      paddingBottom: 6,
+      paddingTop: 8,
     },
     hidden: {
       display: 'none',

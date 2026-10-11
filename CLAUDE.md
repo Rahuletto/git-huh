@@ -125,14 +125,21 @@ compiled on a Mac.
 
 ## Layout
 
-- `src/screens/` — one file per screen: `Hey`, `Now`, `Weather`, `Clock`,
-  `Inbox`, `Queue` (`inbox · review`), `Assigned`, `Index`, `Brief`, `Review`, `Cards`, `Poster`, `Flow`, `Orbit`,
-  `Archive`, `People` (`year · people`), `Ideas` (local project notes), `Dots` (unlinked legacy view), plus `Loading` (the widget's
-  card with a light sweeping its dots, shown while the first request is in
-  flight), and the pushed pages: `Pull`, `Thread` (issue or discussion),
-  `Repo`, `File`, `NewIssue`, `Account` (behind the avatar in every section's
+- `src/screens/` — the section pages `Today`, `Inbox`, `Work`, `Year` (and
+  `Ideas`, local project notes), each one scrolling page composed of **blocks**;
+  the blocks keep their pin-named files and still export `…Screen`: `Hey`, `Now`
+  (with `Weather` as a card inside it), `Clock` (`hours`), `Index` (`pulls`),
+  `Brief`, `Review` (`cycle`), `Cards` (`repos`), `Poster` (`weeks`), `Flow`
+  (`split`), `Orbit` (`languages`), `Archive` (`years`), `People`. A block
+  renders a `Block` (its `ScreenHead` and cards), never a `Page` of its own.
+  `Queue` and `Assigned` export a `Tile` for the inbox's page and a pushed page;
+  `Brief` a tile and the pushed reader; `People` the block and a pushed page of
+  everyone. Plus `Loading` (the widget's card with a light sweeping its dots,
+  shown while the first request is in flight), `Dots` (unlinked legacy view),
+  and the other pushed pages: `Pull`, `Thread` (issue or discussion), `Repo`,
+  `File`, `NewIssue`, `Account` (behind the avatar in every section's
   top-right corner: accounts, which are added together, notifications, what
-  the `you` page lists) and `Share` (a view as a 4:3 image).
+  the foot of `today` lists) and `Share` (a chart as a 4:3 image).
 - **Pushed pages are a stack** (`src/lib/nav.tsx`, rendered over the tabs in
   `app/(tabs)/_layout.tsx`). Screens reach it with `useNav()`, which also carries the
   token, the login and whether this is the demo — do not thread those
@@ -166,7 +173,7 @@ compiled on a Mac.
   `login`, `nav.token` and every write — only that token can act. Show a
   handle with `handleOf(model)`, never `~${model.login}`, or a summed year is
   labelled with one account's name.
-- `src/lib/home.ts` — what the `you` page lists under the greeting (pull
+- `src/lib/home.ts` — what the feed at the foot of `today` lists (pull
   request comments by default), a filter over the inbox's own feed **plus the
   history paged in by `src/hooks/useFeedHistory.ts`** (`fetchSocialPage` in
   `social.ts`: ten of your pull requests at a time, open or closed, as the page
@@ -182,7 +189,8 @@ compiled on a Mac.
   as a 640 × 480 card, captured at 1600 × 1200 (react-native-view-shot) and
   handed to the share sheet (expo-sharing). Cards are composed for the
   frame, not scaled screens; the caps that keep any account inside it are in
-  `src/lib/shareData.ts`, which also says which view shares as which card.
+  `src/lib/shareData.ts`. `share` is on each chart's own head (the `action`
+  of `ScreenHead`), pushing `{ kind: 'share', card }`.
 - **Navigation is five sections on the native tab bar.** Each section is a
   route in `app/(tabs)/` (`index` is `today`), all five render
   `src/shell/SectionScreen.tsx`, and the bar is expo-router's `NativeTabs` in
@@ -190,24 +198,27 @@ compiled on a Mac.
   **The app's state is not in a screen**: `src/shell/session.tsx`
   (`SessionProvider`, `useSession`) holds the token, the year, the inbox and
   the pushed pages above the navigator, and reads which section is open from
-  the path. `src/shell/sections.ts` `SECTIONS` is the whole map: `today` (you · now · weather · hours),
-  `inbox` (recent · review · assigned), `work` (pulls · brief · cycle · repos), `year` (weeks ·
-  split · languages · years · people) and `ideas` (project ideas saved locally on the device).
-  The in-section switcher is `src/components/Segments.tsx`. Apple's HIG is the reference: three to five persistent
-  labelled destinations, no drawer, no hamburger, segmented control for views
-  of one subject. **Do not add a sixth section**, and do not put an action in
-  the bar.
-- A section mounts the first time it is opened and keeps its own page after
-  that, so the fetches are gated on the *section* (and, for the heavy
-  activity request, on the view one step before the one that needs it).
-- **Pushed pages are not sections.** They render *over* everything because
-  they have horizontal scrollers of their own (the diff, a file, a log), and
-  a horizontal scroller nested inside a pager loses every drag to the page
-  swipe — which is also why the poster's year chips wrap instead of
-  scrolling. A one-view section (`ideas`) and `inbox` (`swipe: false` in
-  `sections.ts`) turn their pager's scrolling off, or the inbox's swipe
-  actions would lose their drag the same way — the inbox's views change from
-  the segments alone.
+  the path. `src/shell/sections.ts` `SECTIONS` is the list of the five, and
+  `src/shell/SectionScreen.tsx` gives each its chrome and its page: `today`
+  (you · today · hours · the feed), `inbox` (the review and assigned tiles ·
+  recent), `work` (pulls · the brief · cycle · repos), `year` (weeks · split ·
+  languages · years · people) and `ideas` (project ideas saved locally on the
+  device). **A section is one page; there is no second row of tabs.** It used
+  to be a segmented control over a horizontal pager — a tab bar inside a tab
+  bar — and that is what this layout replaced; do not bring it back. A list too
+  long for its page shows its head (`Tile`, or the first rows and `More`) and
+  pushes the rest. `Segments` survives only on `pull`, a pushed page, where it
+  is the one row on screen. Apple's HIG is the reference: three to five
+  persistent labelled destinations, no drawer, no hamburger. **Do not add a
+  sixth section**, and do not put an action in the bar.
+- A section mounts the first time it is opened and keeps its scroll after
+  that, so the fetches are gated on the *section*. The heavy activity request
+  (commit history, pull request bodies) is asked for when `work` is open, or
+  when `today` is scrolled half a screen towards `hours` (`wantActivity`,
+  `Page`'s `onDeep`) — never on launch. The demo has its activity at once.
+- **Pushed pages are not sections.** They render *over* everything, the bar
+  included (`app/(tabs)/_layout.tsx`), each in an `OverlayFrame` with `← back`
+  and the system back button wired to it.
 - `src/lib/activity.ts` — the second-tier data layer: sampled commit history
   and pull request detail. `src/lib/social.ts` — the `inbox` section's feed,
   built from search plus each PR's comment and review connections
@@ -430,7 +441,10 @@ run in the background goes in that file too.
 ### Animating from JavaScript
 
 Do not. (The one exception is an inbox row following a finger, which a
-`PanResponder` has to drive.) The loading wave went through a `setInterval` stepping a counter
+`PanResponder` has to drive.) The language spiral was the last holdout — a
+`requestAnimationFrame` loop redrawing the SVG — and on a section page that
+scrolls it stuttered the scroll; it is now drawn once and rotated on the native
+driver, each mark in its own canvas counter-rotating to stay upright. The loading wave went through a `setInterval` stepping a counter
 (~16 fps, visibly steppy) and then a `requestAnimationFrame` loop (right
 timing, still slow) before landing on the only thing that works: precompute
 every mark's whole track at mount (today, each dot's scale and opacity as the

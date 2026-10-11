@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   Pressable,
   ScrollView,
@@ -9,16 +9,96 @@ import {
 
 import { DiffDots } from '../components/DiffDots';
 import { Markdown } from '../components/Markdown';
+import { OverlayFrame } from '../components/Overlay';
 import { StateChip } from '../components/StateChip';
 import { Squiggle } from '../components/Squiggle';
 import { Data, Heading, Label } from '../components/Type';
 import type { Activity, PullDetail } from '../lib/activity';
+import { useNav } from '../lib/nav';
+import { useSession } from '../shell/session';
 import { colors, radii, space, themed } from '../theme';
-import { ago, fmt } from './shared';
+import { ago, Block, fmt, More, ScreenHead } from './shared';
 
 /**
- * pin03's filing card, opened up. The `index` screen lists pull requests;
- * this one actually reads one — the description, the diff, the review state.
+ * The brief on the `work` page: the newest of your pull requests as pin03's
+ * filing card — its state, its title, the size of its diff, the first lines
+ * of its description — and the way into the reader that pages through the
+ * rest. The card itself opens that pull request.
+ */
+export function BriefTile({ activity, loading }: { activity: Activity; loading: boolean }) {
+  const nav = useNav();
+  const { width } = useWindowDimensions();
+  const pulls = activity.pulls;
+  const pr = pulls[0];
+
+  return (
+    <Block>
+      <ScreenHead
+        left="the brief"
+        right={pulls.length > 0 ? `${pulls.length} descriptions` : ''}
+      />
+      {loading && !pr && <Label style={styles.note}>opening the file…</Label>}
+      {!loading && !pr && <Label style={styles.note}>no pull requests to read</Label>}
+      {pr && (
+        <>
+          <Pressable
+            accessibilityHint="opens the pull request"
+            accessibilityRole="button"
+            onPress={() => nav.open({ kind: 'pull', repo: pr.repo, number: pr.number })}
+          >
+            <FileCard pr={pr} />
+            <View style={styles.excerpt}>
+              <Markdown limit={260} source={pr.body} width={width - space.gutter * 2 - 8} />
+            </View>
+          </Pressable>
+          {pulls.length > 1 && (
+            <More label={`read all ${pulls.length} in order`} onPress={() => nav.open({ kind: 'brief' })} />
+          )}
+        </>
+      )}
+    </Block>
+  );
+}
+
+/** pin03's card: number and state, repository, title, the diff, the figures, the labels. */
+function FileCard({ pr }: { pr: PullDetail }) {
+  return (
+    <View style={styles.card}>
+      <View style={styles.tabRow}>
+        <Data style={styles.tabText}>#{pr.number}</Data>
+        <PullState pr={pr} />
+      </View>
+
+      <Data style={styles.repo}>{pr.repo}</Data>
+      <Heading style={styles.prTitle}>{pr.title}</Heading>
+
+      <View style={styles.diff}>
+        <DiffDots additions={pr.additions} deletions={pr.deletions} />
+      </View>
+
+      <View style={styles.statRow}>
+        <Data style={styles.stat}>{fmt(pr.changedFiles)} files</Data>
+        <Data style={styles.stat}>{fmt(pr.commits)} commits</Data>
+        <Data style={styles.stat}>{fmt(pr.comments)} comments</Data>
+        <Data style={styles.stat}>{ago(pr.createdAt)}</Data>
+      </View>
+
+      {pr.labels.length > 0 && (
+        <View style={styles.labels}>
+          {pr.labels.map((label) => (
+            <View key={label.name} style={styles.label}>
+              <Data style={styles.labelText}>{label.name}</Data>
+            </View>
+          ))}
+        </View>
+      )}
+    </View>
+  );
+}
+
+/**
+ * pin03's filing card, opened up: your pull requests' descriptions, one
+ * after another, without going back to a list each time.
  *
  * The description is rendered rather than printed: GitHub hands back raw
  * Markdown, and verbatim a heading arrives as a literal `## Problem` and a
@@ -26,98 +106,27 @@ import { ago, fmt } from './shared';
  *
  * Paging lives in a bar pinned to the bottom, so `next` is in the same place
  * on every pull request. Under the description, its position would depend on
- * how much the author had written.
+ * how much the author had written. Where you are is said once, in that bar.
  */
-export function BriefScreen({
-  activity,
-  loading,
-  onOpen,
-}: {
-  activity: Activity;
-  loading: boolean;
-  onOpen: (pr: PullDetail) => void;
-}) {
+export function BriefPage() {
+  const nav = useNav();
+  const { activity, activityState } = useSession();
   const { width } = useWindowDimensions();
   const [index, setIndex] = useState(0);
+  const scroll = useRef<ScrollView>(null);
   const pulls = activity.pulls;
   const at = Math.min(index, Math.max(0, pulls.length - 1));
   const pr = pulls[at];
   const body = width - space.gutter * 2;
+  const go = (next: number) => {
+    setIndex(next);
+    scroll.current?.scrollTo({ animated: false, y: 0 });
+  };
 
   return (
-    <View style={styles.screen}>
-      <View style={styles.masthead}>
-        <Label style={styles.title}>the brief</Label>
-        <Label>{pulls.length ? `${at + 1} / ${pulls.length}` : '—'}</Label>
-      </View>
-
-      {loading && <Label style={styles.note}>opening the file…</Label>}
-      {!loading && !pr && (
-        <Label style={styles.note}>no pull requests to read</Label>
-      )}
-
-      {pr && (
-        <>
-          <ScrollView
-            contentContainerStyle={styles.page}
-            showsVerticalScrollIndicator={false}
-            style={styles.scroll}
-          >
-            <View style={styles.card}>
-              <View style={styles.tabRow}>
-                <Data style={styles.tabText}>#{pr.number}</Data>
-                <PullState pr={pr} />
-              </View>
-
-              <Data style={styles.repo}>{pr.repo}</Data>
-              <Heading style={styles.prTitle}>{pr.title}</Heading>
-
-              <View style={styles.diff}>
-                <DiffDots additions={pr.additions} deletions={pr.deletions} />
-              </View>
-
-              <View style={styles.statRow}>
-                <Data style={styles.stat}>{fmt(pr.changedFiles)} files</Data>
-                <Data style={styles.stat}>{fmt(pr.commits)} commits</Data>
-                <Data style={styles.stat}>{fmt(pr.comments)} comments</Data>
-                <Data style={styles.stat}>{ago(pr.createdAt)}</Data>
-              </View>
-
-              {pr.labels.length > 0 && (
-                <View style={styles.labels}>
-                  {pr.labels.map((label) => (
-                    <View key={label.name} style={styles.label}>
-                      <Data style={styles.labelText}>{label.name}</Data>
-                    </View>
-                  ))}
-                </View>
-              )}
-            </View>
-
-            <Label style={styles.bodyHead}>the description</Label>
-            <Squiggle
-              amplitude={2.4}
-              length={body * 0.45}
-              opacity={0.45}
-              style={styles.headRule}
-              wavelength={13}
-            />
-
-            {/* Clamped: this is the shelf copy, and the whole thing is one
-                tap away on the pull request itself. */}
-            <Markdown limit={900} source={pr.body} width={body} />
-
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => onOpen(pr)}
-              style={styles.openRow}
-            >
-              <Label style={styles.openLabel}>
-                read the whole thing · talk · diff →
-              </Label>
-            </Pressable>
-          </ScrollView>
-
+    <OverlayFrame
+      footer={
+        pr ? (
           <View style={styles.footer}>
             <Squiggle
               amplitude={2.4}
@@ -129,7 +138,7 @@ export function BriefScreen({
             <Pressable
               accessibilityRole="button"
               disabled={at <= 0}
-              onPress={() => setIndex(Math.max(0, at - 1))}
+              onPress={() => go(Math.max(0, at - 1))}
               style={[styles.pill, at <= 0 && styles.muted]}
             >
               <Label style={styles.pillLabel}>← prev</Label>
@@ -140,19 +149,56 @@ export function BriefScreen({
             <Pressable
               accessibilityRole="button"
               disabled={at >= pulls.length - 1}
-              onPress={() => setIndex(Math.min(pulls.length - 1, at + 1))}
-              style={[
-                styles.pill,
-                styles.solid,
-                at >= pulls.length - 1 && styles.muted,
-              ]}
+              onPress={() => go(Math.min(pulls.length - 1, at + 1))}
+              style={[styles.pill, styles.solid, at >= pulls.length - 1 && styles.muted]}
             >
               <Label style={styles.solidLabel}>next →</Label>
             </Pressable>
           </View>
-        </>
+        ) : null
+      }
+      onBack={nav.close}
+      where="work · the brief"
+    >
+      {activityState.status !== 'ready' && !pr && (
+        <Label style={styles.note}>opening the file…</Label>
       )}
-    </View>
+      {activityState.status === 'ready' && !pr && (
+        <Label style={styles.note}>no pull requests to read</Label>
+      )}
+
+      {pr && (
+        <ScrollView
+          contentContainerStyle={styles.page}
+          ref={scroll}
+          showsVerticalScrollIndicator={false}
+          style={styles.scroll}
+        >
+          <FileCard pr={pr} />
+
+          <Label style={styles.bodyHead}>the description</Label>
+          <Squiggle
+            amplitude={2.4}
+            length={body * 0.45}
+            opacity={0.45}
+            style={styles.headRule}
+            wavelength={13}
+          />
+
+          {/* Clamped: this is the shelf copy, and the whole thing is one
+              tap away on the pull request itself. */}
+          <Markdown limit={900} source={pr.body} width={body} />
+
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => nav.open({ kind: 'pull', repo: pr.repo, number: pr.number })}
+            style={styles.openRow}
+          >
+            <Label style={styles.openLabel}>read the whole thing · talk · diff →</Label>
+          </Pressable>
+        </ScrollView>
+      )}
+    </OverlayFrame>
   );
 }
 
@@ -171,17 +217,9 @@ function PullState({ pr }: { pr: PullDetail }) {
 
 const styles = themed(() =>
   StyleSheet.create({
-    screen: {
-      flex: 1,
-      paddingTop: 4,
-    },
-    masthead: {
-      alignItems: 'baseline',
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      marginHorizontal: space.gutter,
-      paddingBottom: 4,
+    excerpt: {
       paddingHorizontal: 4,
+      paddingTop: 10,
     },
     scroll: {
       flex: 1,
@@ -189,10 +227,7 @@ const styles = themed(() =>
     page: {
       paddingBottom: 24,
       paddingHorizontal: space.gutter,
-      paddingTop: 16,
-    },
-    title: {
-      color: colors.ink,
+      paddingTop: 10,
     },
     card: {
       backgroundColor: colors.card,
@@ -307,7 +342,7 @@ const styles = themed(() =>
       opacity: 0.3,
     },
     note: {
-      marginTop: 24,
+      paddingVertical: 12,
       textAlign: 'center',
     },
   }),

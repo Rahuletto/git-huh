@@ -1,64 +1,20 @@
-import { memo, useCallback, useEffect, useRef } from 'react';
-import {
-  Linking,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  useWindowDimensions,
-  View,
-} from 'react-native';
+import { useCallback } from 'react';
+import { Linking, Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Avatar } from '../components/Avatar';
 import { TOKEN_SETTINGS_URL } from '../components/PatForm';
-import { Segments } from '../components/Segments';
 import { Label } from '../components/Type';
 import { Wordmark } from '../components/Wordmark';
-import { shareKindOf } from '../lib/shareData';
 import { savedAge } from '../lib/store';
-import { ArchiveScreen as ArchiveView } from '../screens/ArchiveScreen';
-import { AssignedScreen as AssignedView } from '../screens/AssignedScreen';
-import { BriefScreen as BriefView } from '../screens/BriefScreen';
-import { CardsScreen as CardsView } from '../screens/CardsScreen';
-import { ClockScreen as ClockView } from '../screens/ClockScreen';
-import { IdeasScreen as IdeasView } from '../screens/IdeasScreen';
-import { FlowScreen as FlowView } from '../screens/FlowScreen';
-import { HeyScreen as HeyView } from '../screens/HeyScreen';
-import { InboxScreen as InboxView } from '../screens/InboxScreen';
-import { IndexScreen as IndexView } from '../screens/IndexScreen';
-import { NowScreen as NowView } from '../screens/NowScreen';
-import { OrbitScreen as OrbitView } from '../screens/OrbitScreen';
-import { PeopleScreen as PeopleView } from '../screens/PeopleScreen';
-import { PosterScreen as PosterView } from '../screens/PosterScreen';
-import { QueueScreen as QueueView } from '../screens/QueueScreen';
-import { ReviewScreen as ReviewView } from '../screens/ReviewScreen';
-import { WeatherScreen as WeatherView } from '../screens/WeatherScreen';
+import { IdeasScreen } from '../screens/IdeasScreen';
+import { InboxScreen } from '../screens/InboxScreen';
+import { TodayScreen } from '../screens/TodayScreen';
+import { WorkScreen } from '../screens/WorkScreen';
+import { YearScreen } from '../screens/YearScreen';
 import { colors, radii, space, themed } from '../theme';
-import { SECTIONS, type ScreenName, type SectionView } from './sections';
+import { SECTIONS } from './sections';
 import { useSession } from './session';
-
-/**
- * Every section stays mounted once opened, and the session changes often — the
- * inbox refreshes, a page is pushed over everything. Memoised, a screen redraws
- * when its own data does, not whenever any of the fourteen's does.
- */
-const ArchiveScreen = memo(ArchiveView);
-const AssignedScreen = memo(AssignedView);
-const BriefScreen = memo(BriefView);
-const CardsScreen = memo(CardsView);
-const ClockScreen = memo(ClockView);
-const IdeasScreen = memo(IdeasView);
-const FlowScreen = memo(FlowView);
-const HeyScreen = memo(HeyView);
-const InboxScreen = memo(InboxView);
-const IndexScreen = memo(IndexView);
-const NowScreen = memo(NowView);
-const OrbitScreen = memo(OrbitView);
-const PeopleScreen = memo(PeopleView);
-const PosterScreen = memo(PosterView);
-const QueueScreen = memo(QueueView);
-const ReviewScreen = memo(ReviewView);
-const WeatherScreen = memo(WeatherView);
 
 /**
  * The one thing the app cannot fix for you.
@@ -84,161 +40,38 @@ function ScopeNotice() {
 }
 
 /**
- * One section's segmented control and the pager holding its views.
+ * A tab: the wordmark and the account, the scope strip if it applies, and the
+ * section's page.
  *
- * The pager stops at the section's own edges. A swipe never crosses into
- * another section — sections are chosen from the bar, deliberately, and a
- * horizontal drag that can land you three destinations away is the fault the
- * old thirteen-page rail had.
+ * A section is **one page**, scrolled, not a row of views to switch between:
+ * the bar at the bottom is the only row of tabs in the app. What used to be a
+ * section's views are blocks on its page, each opened by the same two-part
+ * caption, and a list too long for the page shows its head and pushes the
+ * rest (`More`, `Tile`).
  */
-function SectionPager({
-  views,
-  swipe,
-  page,
-  onPage,
-  active,
-  width,
-  render,
-}: {
-  views: readonly SectionView[];
-  swipe: boolean;
-  page: number;
-  onPage: (index: number) => void;
-  active: boolean;
-  width: number;
-  render: (name: ScreenName, live: boolean) => React.ReactNode;
-}) {
-  const pager = useRef<ScrollView>(null);
-  const shown = useRef(page);
-
-  // Also runs when the section comes back into view: a pager that has been
-  // off screen cannot be trusted to have kept its offset, and landing on view
-  // one while the control says view three is worse than a jump.
-  useEffect(() => {
-    if (!active) return;
-    pager.current?.scrollTo({ animated: shown.current !== page, x: page * width });
-    shown.current = page;
-  }, [active, page, width]);
-
-  return (
-    <>
-      {views.length > 1 && (
-        <Segments
-          current={page}
-          items={views.map((view) => view.label)}
-          onSelect={onPage}
-        />
-      )}
-      <ScrollView
-        horizontal
-        keyboardDismissMode="on-drag"
-        onMomentumScrollEnd={(event) => {
-          const next = Math.round(event.nativeEvent.contentOffset.x / width);
-          shown.current = next;
-          onPage(next);
-        }}
-        pagingEnabled
-        ref={pager}
-        // A one-view section has nothing to page to, and a pager that
-        // claims horizontal drags would eat the inbox's swipe actions — so
-        // the inbox changes view from its segments alone.
-        scrollEnabled={swipe && views.length > 1}
-        showsHorizontalScrollIndicator={false}
-        style={styles.pager}
-      >
-        {views.map((view, index) => (
-          <View key={view.name} style={{ width }}>
-            {render(view.name, active && index === page)}
-          </View>
-        ))}
-      </ScrollView>
-    </>
-  );
-}
-
-/** A tab: the wordmark, the scope strip if it applies, and the section. */
 export function SectionScreen({ index }: { index: number }) {
   const session = useSession();
-  const { width } = useWindowDimensions();
-  const {
-    activity,
-    activityState,
-    contributions,
-    model,
-    nav,
-    pages,
-    prs,
-    social,
-    stack,
-    tab,
-    triage,
-  } = session;
+  const { contributions, model, nav, stack, tab } = session;
   const section = SECTIONS[index];
-  const loadingActivity = activityState.status === 'loading';
-
-  const { goToPage } = session;
-  const openPull = useCallback(
-    (pr: { repo: string; number: number }) =>
-      nav.open({ kind: 'pull', repo: pr.repo, number: pr.number }),
-    [nav],
-  );
+  // On screen: this section, and nothing pushed over it. Animations park and
+  // the feed stops paging in when it is not.
+  const active = index === tab && stack.length === 0;
   const openAccount = useCallback(() => nav.open({ kind: 'account' }), [nav]);
-  const view = section.views[pages[index]]?.name ?? section.views[0].name;
-  const shareable = shareKindOf(view) != null;
-  const onPage = useCallback((page: number) => goToPage(index, page), [goToPage, index]);
 
-  const render = (name: ScreenName, live: boolean) => {
-    if (name === 'ideas') return <IdeasScreen key={nav.demo ? 'demo' : 'local'} demo={nav.demo} />;
-    if (!model) return null;
-    switch (name) {
-      case 'hey':
-        return (
-          <HeyScreen
-            active={live}
-            home={session.home}
-            lines={session.lines}
-            model={model}
-            onOpen={session.openEvent}
-            onSettings={openAccount}
-            social={social}
-          />
-        );
-      case 'now':
-        return <NowScreen model={model} />;
-      case 'weather':
-        return <WeatherScreen model={model} />;
-      case 'clock':
-        return <ClockScreen activity={activity} loading={loadingActivity} />;
+  const page = (() => {
+    switch (section.key) {
+      case 'today':
+        return <TodayScreen active={active} />;
       case 'inbox':
-        return <InboxScreen onOpen={session.openEvent} state={social} triage={triage} />;
-      case 'queue':
-        return <QueueScreen onOpen={openPull} state={session.queue} />;
-      case 'assigned':
-        return <AssignedScreen onOpen={session.openUrl} state={session.tasks} />;
-      case 'index':
-        return (
-          <IndexScreen onOpen={openPull} state={prs} />
-        );
-      case 'brief':
-        return (
-          <BriefScreen activity={activity} loading={loadingActivity} onOpen={openPull} />
-        );
-      case 'review':
-        return <ReviewScreen activity={activity} loading={loadingActivity} />;
-      case 'cards':
-        return <CardsScreen activity={activity} model={model} />;
-      case 'poster':
-        return <PosterScreen model={model} />;
-      case 'flow':
-        return <FlowScreen model={model} />;
-      case 'orbit':
-        return <OrbitScreen active={live} model={model} />;
-      case 'archive':
-        return <ArchiveScreen model={model} />;
-      case 'people':
-        return <PeopleScreen state={session.people} />;
+        return <InboxScreen />;
+      case 'work':
+        return <WorkScreen />;
+      case 'year':
+        return <YearScreen active={active} />;
+      case 'ideas':
+        return <IdeasScreen key={nav.demo ? 'demo' : 'local'} demo={nav.demo} />;
     }
-  };
+  })();
 
   return (
     <SafeAreaView edges={['top']} style={styles.screen}>
@@ -252,17 +85,6 @@ export function SectionScreen({ index }: { index: number }) {
                 offline · {savedAge(contributions.savedAt)}
               </Label>
             )}
-          {shareable && model && (
-            <Pressable
-              accessibilityLabel="share this view as an image"
-              accessibilityRole="button"
-              hitSlop={8}
-              onPress={() => nav.open({ kind: 'share', view })}
-              style={styles.share}
-            >
-              <Label style={styles.shareLabel}>share</Label>
-            </Pressable>
-          )}
           {model && (
             <Pressable
               accessibilityLabel="account, notifications and settings"
@@ -286,21 +108,7 @@ export function SectionScreen({ index }: { index: number }) {
 
       {section.key !== 'ideas' && session.scopes === 'limited' && <ScopeNotice />}
 
-      <View style={styles.body}>
-        {section.views.length === 1 ? (
-          render(section.views[0].name, index === tab && stack.length === 0)
-        ) : (
-          <SectionPager
-            active={index === tab && stack.length === 0}
-            onPage={onPage}
-            page={pages[index]}
-            render={render}
-            swipe={section.swipe !== false}
-            views={section.views}
-            width={width}
-          />
-        )}
-      </View>
+      <View style={styles.body}>{page}</View>
     </SafeAreaView>
   );
 }
@@ -328,16 +136,6 @@ const styles = themed(() =>
     handle: {
       color: colors.ink40,
       flexShrink: 1,
-    },
-    share: {
-      borderColor: colors.hairStrong,
-      borderRadius: radii.pill,
-      borderWidth: 1,
-      paddingHorizontal: 11,
-      paddingVertical: 5,
-    },
-    shareLabel: {
-      color: colors.ink,
     },
     avatars: {
       flexDirection: 'row',
@@ -367,9 +165,6 @@ const styles = themed(() =>
       flex: 1,
     },
     body: {
-      flex: 1,
-    },
-    pager: {
       flex: 1,
     },
   }),

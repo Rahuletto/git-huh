@@ -138,21 +138,25 @@ widget's own corner) · `tile` 14 · `pill` 999.
 Motion is still rare, and now it is the widget's: things **travel**.
 
 - **The strip travels** (`Marquee`) — your commit messages, `repo ~~~ message`,
-  sliding left on the `you` page and the loading card.
+  sliding left at the top of `today` and on the loading card.
 - **The light sweeps** through the loading card's dots towards today.
-- **The spiral turns** on `languages`.
+- **The spiral turns** on `languages`: the drawing is made once and the
+  view holding it rotates, each language's mark turning back against it to
+  stay upright.
 
 Three rules, all learned the hard way:
 
 1. **Never animate from JavaScript.** Everything above runs on the native
    driver from values computed once at mount: the strip is one `translateX`
    over a sequence drawn twice, the sweep is one looping value interpolated
-   into each dot's scale and opacity. Two earlier loading screens animated from
-   JS (a `setInterval`, then `requestAnimationFrame`) and both stuttered exactly
-   while the first response was being parsed.
+   into each dot's scale and opacity, the spiral is one rotation. Two earlier
+   loading screens animated from JS (a `setInterval`, then
+   `requestAnimationFrame`) and both stuttered exactly while the first
+   response was being parsed; the spiral did too, and on a page that scrolls
+   a JS frame loop stutters the scroll as well.
 2. **Park what is off screen.** A section stays mounted once opened, so every
-   animation takes an `active` prop and stops when its page is not the one
-   being looked at.
+   animation takes an `active` prop and stops when its section is not the one
+   being looked at, or a page is pushed over it.
 3. **Arrive, don't appear.** Anything full-page fades in over ~500 ms.
 
 There are no hover states, no spinners, no skeletons — a screen that is loading
@@ -165,27 +169,41 @@ then lets go.
 
 ## 7. Patterns
 
-**Navigation is two levels and both are visible.** A bar of five sections at
-the bottom — the platform's own tab bar (Liquid Glass on iOS 26, Material 3's
-navigation bar on Android, where the selected pill is the card's colour) —
-and a segmented control at the top for the views inside one section
-(`Segments`: the view you are in is in full ink with the app's wave under it). Nothing lives behind a menu, a drawer or
-a scrolling list of names; if a screen exists, one tap and at most one swipe
-reaches it. Sections are content — never actions — and there are never more
-than five. `DESIGN.md` § Navigation has the table; `STORIES.md` has the
-argument.
+**Navigation is one row of tabs, and a section is one page.** A bar of five
+sections at the bottom — the platform's own tab bar (Liquid Glass on iOS 26,
+Material 3's navigation bar on Android, where the selected pill is the card's
+colour) — and under each, a single page that scrolls. There is **no second
+row of tabs** inside a section: a segmented control of four or five views
+under a tab bar is a tab bar in a tab bar, it hid most of a section behind
+labels, and `now` and `weather` drew today's count and the week twice
+without anyone noticing. What were a section's views are **blocks** on its
+page, in reading order, each opened by its screen head. A list too long for
+the page shows its head there — a `Tile` (a count and a `WaitDot` per item)
+or the first few rows and `all 12 →` (`More`) — and pushes the rest. Nothing
+lives behind a menu, a drawer or a scrolling list of names. Sections are
+content — never actions — and there are never more than five. `DESIGN.md` §
+Navigation has the map; `STORIES.md` has the argument.
 
-**Screen head.** Every scrolling screen opens with the same two-part caption:
-a mono name on the left, a mono figure on the right (`ScreenHead`). It is the
-single strongest thing holding thirteen very different layouts together.
+A pushed page about one thing may have views of it (`Segments` — a pull
+request's brief, talk, diff and checks): it covers the bar, so its row is
+the only one on screen.
+
+**Screen head.** Every block opens with the same two-part caption: a mono
+name on the left, a mono figure on the right (`ScreenHead`). It is the single
+strongest thing holding a dozen very different layouts together, and on a
+section's page it is what divides one block from the next — blocks sit
+further apart than the cards inside a block. A block's one action (`share`
+on a chart, `change` on the feed) sits at the end of its head as a small
+pill.
 
 **Card head.** A card that holds one thing names it the same way, smaller:
 `Card`'s `title` and `figure`.
 
 **Chips.** Outlined pill, mono label, filled when on (`Chips` in
-`screens/shared.tsx`). Used for filters, years, tabs. **Chips wrap; they never scroll horizontally** — the app is one
-big horizontal pager and a nested horizontal scroller loses every drag to the
-page swipe. This is not a preference, it is a bug that has been fixed twice.
+`screens/shared.tsx`). Used for filters and years — a filter on one list,
+never a way between screens. **Chips wrap; they never scroll horizontally**,
+so every choice and its count is in view at once; a sideways scroller also
+loses its drag to anything around it that claims one (the inbox's rows do).
 
 **Counts belong on the control.** A filter that says `open 4 / draft 1` tells
 you whether the other tab is worth a tap. A bare `open / draft` does not.

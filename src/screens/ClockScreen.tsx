@@ -11,7 +11,7 @@ import {
   type Activity,
 } from '../lib/activity';
 import { colors, fonts, levels, themed } from '../theme';
-import { fmt, Page, ScreenHead } from './shared';
+import { Block, fmt, ScreenHead } from './shared';
 
 /**
  * Derived from pin02's analog dial, opened out to twenty-four hours: when do
@@ -21,9 +21,11 @@ import { fmt, Page, ScreenHead } from './shared';
 export function ClockScreen({
   activity,
   loading,
+  onShare,
 }: {
   activity: Activity;
   loading: boolean;
+  onShare: () => void;
 }) {
   const { width } = useWindowDimensions();
   const size = Math.min(width - 72, 320);
@@ -42,13 +44,18 @@ export function ClockScreen({
   const nightShare = sampled > 0 ? night / sampled : 0;
 
   return (
-    <Page>
+    <Block>
       <ScreenHead
+        action={
+          sampled > 0
+            ? { hint: 'makes your hours an image to post', label: 'share', onPress: onShare }
+            : undefined
+        }
         left="when you commit"
         right={sampled > 0 ? `${fmt(sampled)} commits` : ''}
       />
 
-      {loading && <Label style={styles.note}>reading commit history…</Label>}
+      {loading && sampled === 0 && <Label style={styles.note}>reading commit history…</Label>}
 
       {!loading && sampled === 0 && (
         <Label style={styles.note}>
@@ -92,7 +99,7 @@ export function ClockScreen({
           </Card>
         </>
       )}
-    </Page>
+    </Block>
   );
 }
 
@@ -228,7 +235,7 @@ const styles = themed(() =>
       flex: 1,
     },
     note: {
-      marginTop: 24,
+      paddingVertical: 12,
       textAlign: 'center',
     },
   }),

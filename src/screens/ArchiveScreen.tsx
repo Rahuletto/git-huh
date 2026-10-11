@@ -6,7 +6,7 @@ import { Label } from '../components/Type';
 import type { GitHubModel, YearSummary } from '../lib/contributions';
 import { howLongMonths, quietRuns, wavePath } from '../lib/quiet';
 import { colors, fonts, themed } from '../theme';
-import { fmt, Page, ScreenHead } from './shared';
+import { Block, fmt, ScreenHead } from './shared';
 
 const ROW_HEIGHT = 44;
 
@@ -17,7 +17,7 @@ const ROW_HEIGHT = 44;
  * months or more without a circle is bridged with the app's wave, so a quiet
  * season reads as one stretch rather than as circles that failed to draw.
  */
-export function ArchiveScreen({ model }: { model: GitHubModel }) {
+export function ArchiveScreen({ model, onShare }: { model: GitHubModel; onShare: () => void }) {
   const { width } = useWindowDimensions();
   const chartWidth = width - 36 - 36;
 
@@ -45,8 +45,12 @@ export function ArchiveScreen({ model }: { model: GitHubModel }) {
   const chartHeight = years.length * ROW_HEIGHT + 12;
 
   return (
-    <Page>
-      <ScreenHead left="every year" right={`${years.length} on record`} />
+    <Block>
+      <ScreenHead
+        action={{ hint: 'makes every year an image to post', label: 'share', onPress: onShare }}
+        left="every year"
+        right={`${years.length} on record`}
+      />
 
       <Card>
       <View style={styles.heads}>
@@ -83,7 +87,7 @@ export function ArchiveScreen({ model }: { model: GitHubModel }) {
         ))}
       </Svg>
       </Card>
-    </Page>
+    </Block>
   );
 }
 

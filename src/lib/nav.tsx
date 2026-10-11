@@ -1,18 +1,18 @@
 import { createContext, useContext } from 'react';
 
-import type { ScreenName } from '../shell/sections';
+import type { ShareKind } from './shareData';
 
 /**
  * Everything that opens *over* the sections: a pull request, an issue or a
  * discussion, a repository, a file, the new-issue form, a second account,
- * the account page, and a view made into an image to share.
+ * the account page, a chart made into an image to share, and the long lists
+ * whose head is all a section's page has room for.
  *
  * These are a stack, the way detail views are on every phone: each one
  * pushes over the last and `back` pops it, so a pull request opened from a
  * repository opened from the inbox goes back the way it came. They sit over
- * the sections rather than inside them for the reason `pull` always did —
- * they have horizontal scrollers of their own, and nested inside a pager
- * every one of them loses its drag to the page swipe.
+ * the sections, the bar included, because a detail page has its own way
+ * back and the bar's sections are not where it lives.
  */
 export type Route =
   | { kind: 'pull'; repo: string; number: number }
@@ -30,8 +30,16 @@ export type Route =
   | { kind: 'add-account' }
   /** Accounts, which of them are added together, notifications, the home feed. */
   | { kind: 'account' }
-  /** A view as a 4:3 image, to post somewhere. */
-  | { kind: 'share'; view: ScreenName };
+  /** A chart as a 4:3 image, to post somewhere. */
+  | { kind: 'share'; card: ShareKind; year?: number }
+  /** The review queue in full: asked of you, and reviewed by you. */
+  | { kind: 'queue' }
+  /** Everything assigned to you, and the issues you filed. */
+  | { kind: 'assigned' }
+  /** Your pull requests' descriptions, read one after another. */
+  | { kind: 'brief' }
+  /** Everyone you reviewed with this year. */
+  | { kind: 'people' };
 
 export interface Nav {
   open: (route: Route) => void;

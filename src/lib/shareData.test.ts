@@ -1,14 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { compact, percent, recentYears, shareKindOf, splitOf, topLanguages } from './shareData';
-
-test('charts share, lists do not', () => {
-  assert.equal(shareKindOf('poster'), 'weeks');
-  assert.equal(shareKindOf('hey'), 'year');
-  assert.equal(shareKindOf('inbox'), null);
-  assert.equal(shareKindOf('index'), null);
-});
+import { compact, percent, recentYears, splitOf, topLanguages } from './shareData';
 
 test('languages past the cap fold into other, and the shares add to one', () => {
   const languages = ['a', 'b', 'c', 'd'].map((name, index) => ({

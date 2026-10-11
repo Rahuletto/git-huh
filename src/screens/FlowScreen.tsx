@@ -5,7 +5,7 @@ import { Data, Heading, Label, Title } from '../components/Type';
 import type { GitHubModel } from '../lib/contributions';
 import { Card } from '../components/Card';
 import { colors, themed } from '../theme';
-import { fmt, Page, ScreenHead } from './shared';
+import { Block, fmt, ScreenHead } from './shared';
 
 /**
  * The year as a budget. Ribbons branching left to right,
@@ -81,7 +81,7 @@ function stack<T>(
   }, []);
 }
 
-export function FlowScreen({ model }: { model: GitHubModel }) {
+export function FlowScreen({ model, onShare }: { model: GitHubModel; onShare: () => void }) {
   const { width } = useWindowDimensions();
   const chartWidth = width - 36 - 36;
 
@@ -168,8 +168,12 @@ export function FlowScreen({ model }: { model: GitHubModel }) {
   }, []);
 
   return (
-    <Page>
-      <ScreenHead left="where it went" right="last 12 months" />
+    <Block>
+      <ScreenHead
+        action={{ hint: 'makes the split an image to post', label: 'share', onPress: onShare }}
+        left="where it went"
+        right="last 12 months"
+      />
 
       <Card>
       <View style={styles.trunkRow}>
@@ -272,7 +276,7 @@ export function FlowScreen({ model }: { model: GitHubModel }) {
           </View>
         ))}
       </Card>
-    </Page>
+    </Block>
   );
 }
 

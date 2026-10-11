@@ -1,13 +1,14 @@
 import { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { StyleSheet, useWindowDimensions } from 'react-native';
 import Svg, { Line, Path, Text as SvgText } from 'react-native-svg';
 
+import { Card } from '../components/Card';
 import { Label } from '../components/Type';
 import type { GitHubModel } from '../lib/contributions';
 import { howLong, howLongMonths, quietRuns, wavePath, weekOfYear } from '../lib/quiet';
 import { dot } from '../components/DotField';
-import { colors, fonts, levels, radii, themed } from '../theme';
-import { fmt, hash } from './shared';
+import { colors, fonts, levels, space, themed } from '../theme';
+import { Block, Chips, fmt, hash, ScreenHead } from './shared';
 
 const AXIS = 18;
 const MONTHS = ['j', 'f', 'm', 'a', 'm', 'j', 'j', 'a', 's', 'o', 'n', 'd'];
@@ -70,22 +71,31 @@ export function seriesFor(model: GitHubModel, year: number, now: Date = new Date
   };
 }
 
+/** How tall the poster stands on the `year` page. */
+const POSTER_HEIGHT = 300;
+
 /**
  * The year as a poster: columns of the widget's dots rising from the
- * baseline and dissolving into a rain of smaller, fainter ones at the top,
- * filling the page the way a poster does. One column per week of the selected year; the year
- * chips walk back through every year the account has been active.
+ * baseline and dissolving into a rain of smaller, fainter ones at the top.
+ * One column per week of the selected year; the year chips walk back through
+ * every year the account has been active.
  *
  * Every year is drawn from its *own* calendar, so 2019 gets the same
  * fifty-two columns as this year rather than twelve monthly bars that read
  * as a different chart — and this year's label sits over this calendar year,
  * not over the trailing 365 days.
  */
-export function PosterScreen({ model }: { model: GitHubModel }) {
+export function PosterScreen({
+  model,
+  onShare,
+}: {
+  model: GitHubModel;
+  /** Opens the share page on the year the poster is showing. */
+  onShare: (year: number) => void;
+}) {
+  const { width } = useWindowDimensions();
   const [year, setYear] = useState<number | null>(null);
-  // The poster is the whole page; its size comes from whatever the pager
-  // leaves after the head, the caption and the year chips.
-  const [stage, setStage] = useState({ width: 0, height: 0 });
+  const stageWidth = width - space.gutter * 2 - space.card * 2;
 
   const years = useMemo(
     () => model.years.map((entry) => entry.year).sort((a, b) => b - a),
@@ -101,60 +111,31 @@ export function PosterScreen({ model }: { model: GitHubModel }) {
   const peakMonth = MONTH_NAMES[series.months[peakIndex] ?? 0];
 
   return (
-    <View style={styles.screen}>
-      <View style={styles.head}>
-        <Label style={styles.headLabel}>{active}</Label>
-        <Label>{series.unit === 'week' ? 'week by week' : 'month by month'}</Label>
-      </View>
+    <Block>
+      <ScreenHead
+        action={{ hint: 'makes this year an image to post', label: 'share', onPress: () => onShare(active) }}
+        left={`${active}, ${series.unit} by ${series.unit}`}
+      />
 
-      <View
-        onLayout={(event) => {
-          const { width, height } = event.nativeEvent.layout;
-          setStage((current) =>
-            current.width === width && current.height === height
-              ? current
-              : { width, height },
-          );
-        }}
-        style={styles.stage}
-      >
-        {stage.width > 0 && stage.height > 0 && (
-          <Svg height={stage.height} width={stage.width}>
-            <PixelRain
-              height={stage.height - AXIS}
-              peak={peak}
-              series={series}
-              width={stage.width}
-            />
-          </Svg>
-        )}
-      </View>
+      <Card>
+        <Svg height={POSTER_HEIGHT} width={stageWidth}>
+          <PixelRain height={POSTER_HEIGHT - AXIS} peak={peak} series={series} width={stageWidth} />
+        </Svg>
+        <Label style={styles.caption}>
+          {total > 0
+            ? `${fmt(total)} contributions · busiest ${series.unit} ${fmt(peak)}, in ${peakMonth}`
+            : `nothing recorded in ${active}`}
+        </Label>
+      </Card>
 
-      <Label style={styles.caption}>
-        {total > 0
-          ? `${fmt(total)} contributions · busiest ${series.unit} ${fmt(peak)}, in ${peakMonth}`
-          : `nothing recorded in ${active}`}
-      </Label>
-
-      {/* Wrapped, not scrolled: a horizontal scroller nested inside the
-          pager loses every drag to the page swipe, so the chips could never
-          be reached past the edge of the screen. */}
-      <View style={styles.chips}>
-        {years.map((candidate) => (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityState={{ selected: candidate === active }}
-            key={candidate}
-            onPress={() => setYear(candidate)}
-            style={[styles.chip, candidate === active && styles.chipOn]}
-          >
-            <Label style={candidate === active ? styles.chipLabelOn : undefined}>
-              {candidate}
-            </Label>
-          </Pressable>
-        ))}
-      </View>
-    </View>
+      {years.length > 1 && (
+        <Chips
+          current={String(active)}
+          items={years.map((candidate) => ({ key: String(candidate), label: String(candidate) }))}
+          onSelect={(key) => setYear(Number(key))}
+        />
+      )}
+    </Block>
   );
 }
 
@@ -301,47 +282,8 @@ function monthTicks(months: number[]): { month: number; column: number }[] {
 
 const styles = themed(() =>
   StyleSheet.create({
-    screen: {
-      backgroundColor: colors.canvas,
-      flex: 1,
-      paddingHorizontal: 20,
-      paddingTop: 4,
-    },
-    head: {
-      alignItems: 'baseline',
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      paddingBottom: 14,
-    },
-    headLabel: {
-      color: colors.ink,
-    },
-    stage: {
-      flex: 1,
-    },
     caption: {
-      marginTop: 10,
-    },
-    chips: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: 8,
-      paddingBottom: 6,
-      paddingTop: 14,
-    },
-    chip: {
-      borderColor: colors.hairStrong,
-      borderRadius: radii.pill,
-      borderWidth: 1,
-      paddingHorizontal: 14,
-      paddingVertical: 7,
-    },
-    chipOn: {
-      backgroundColor: colors.black,
-      borderColor: colors.black,
-    },
-    chipLabelOn: {
-      color: colors.onBlack,
+      marginTop: 12,
     },
   }),
 );

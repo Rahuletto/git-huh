@@ -3,22 +3,27 @@ import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 
 import { Avatar } from '../components/Avatar';
 import { Card } from '../components/Card';
+import { OverlayFrame } from '../components/Overlay';
 import { DotRow } from '../components/DotRow';
 import { Body, Data, Label, Micro } from '../components/Type';
 import type { Remote } from '../hooks/useRemote';
 import type { People, Person } from '../lib/people';
+import { useNav } from '../lib/nav';
 import { savedAge } from '../lib/store';
+import { useSession } from '../shell/session';
 import { colors, fonts, space, themed } from '../theme';
-import { Page, ScreenHead, whyNot } from './shared';
+import { Block, More, Page, ScreenHead, whyNot } from './shared';
 
 /** People drawn as cards; the rest are counted, not listed. */
 const SHOWN = 12;
+/** On the `year` page: the first few, and the way to the rest. */
+const ON_PAGE = 3;
 
 /**
  * `year · people`: who you worked with, measured the one way GitHub records
  * on purpose — review.
  *
- * A sentence first, in the `you` page's voice. Then one of the widget's cards
+ * A sentence first, in the voice of the sentence on `today`. Then one of the widget's cards
  * per person, busiest first: their name, a give-and-take rule — a stretched
  * dot to the left for your pull requests they reviewed, one to the right for
  * theirs you reviewed, both on **one scale across every card** (LANGUAGE §8:
@@ -26,19 +31,30 @@ const SHOWN = 12;
  * as the widget's dots, three quiet months the wave. The foot says how much
  * of the year the sample reached.
  */
-export function PeopleScreen({ state }: { state: Remote<People> }) {
+export function PeopleScreen({
+  state,
+  onMore,
+}: {
+  state: Remote<People>;
+  /** Given on the `year` page, where only the first few fit: opens them all. */
+  onMore?: () => void;
+}) {
   const { width } = useWindowDimensions();
   const inner = width - space.gutter * 2 - space.card * 2;
   const data = state.status === 'ready' ? state.data : null;
   const people = data?.people;
-  const shown = useMemo(() => people?.slice(0, SHOWN) ?? [], [people]);
+  const limit = onMore ? ON_PAGE : SHOWN;
+  const shown = useMemo(() => people?.slice(0, limit) ?? [], [limit, people]);
+  // One scale for every card, the page's few and the full list alike, so a
+  // bar is the same length wherever it is drawn.
+  const all = useMemo(() => people?.slice(0, SHOWN) ?? [], [people]);
   const scale = useMemo(
-    () => Math.max(1, ...shown.map((person) => Math.max(person.reviewedYou, person.youReviewed))),
-    [shown],
+    () => Math.max(1, ...all.map((person) => Math.max(person.reviewedYou, person.youReviewed))),
+    [all],
   );
 
   return (
-    <Page>
+    <Block>
       <ScreenHead left="who you work with" right="last 12 months" />
       {state.status === 'ready' && state.offline && state.savedAt != null && (
         <Micro style={styles.dim}>offline · saved {savedAge(state.savedAt)}</Micro>
@@ -72,15 +88,34 @@ export function PeopleScreen({ state }: { state: Remote<People> }) {
               width={inner}
             />
           ))}
-          {data.people.length > SHOWN && (
-            <Micro style={styles.foot}>
-              and {data.people.length - SHOWN} more, a review or two each
-            </Micro>
+          {onMore && data.people.length > shown.length ? (
+            <More label={`all ${data.people.length} people`} onPress={onMore} />
+          ) : (
+            <>
+              {data.people.length > SHOWN && (
+                <Micro style={styles.foot}>
+                  and {data.people.length - SHOWN} more, a review or two each
+                </Micro>
+              )}
+              <Micro style={styles.foot}>{sampleLine(data.sample)} · bots left out</Micro>
+            </>
           )}
-          <Micro style={styles.foot}>{sampleLine(data.sample)} · bots left out</Micro>
         </>
       )}
-    </Page>
+    </Block>
+  );
+}
+
+/** Everyone, pushed from the `year` page. */
+export function PeoplePage() {
+  const nav = useNav();
+  const { people } = useSession();
+  return (
+    <OverlayFrame onBack={nav.close} where="year · people">
+      <Page>
+        <PeopleScreen state={people} />
+      </Page>
+    </OverlayFrame>
   );
 }
 
@@ -182,7 +217,7 @@ function PersonCard({
 
       <DotRow
         height={16}
-        labels={labels ? initials : undefined}
+        labels={labels ? initials.map((initial) => initial.toLowerCase()) : undefined}
         quiet={3}
         unit="month"
         values={person.months}
@@ -198,12 +233,12 @@ const styles = themed(() =>
       color: colors.ink40,
     },
     note: {
-      marginTop: 18,
+      paddingVertical: 12,
       textAlign: 'center',
     },
     error: {
       color: colors.no,
-      marginTop: 18,
+      paddingVertical: 12,
       textAlign: 'center',
     },
     foot: {

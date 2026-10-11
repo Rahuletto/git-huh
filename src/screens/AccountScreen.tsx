@@ -41,7 +41,7 @@ function how(token: string | null | undefined): string {
 /**
  * Everything about *who* is looking, behind the avatar in the top-right
  * corner of every section: the accounts on this phone and which of them are
- * added together, the notifications, and what the `you` page lists.
+ * added together, the notifications, and what `today` lists at its foot.
  *
  * It used to sit at the bottom of the `you` page, which made the page a
  * settings form with a greeting on top. Settings open from the corner on
@@ -152,8 +152,8 @@ export function AccountScreen() {
 
         <Notify />
 
-        <Label style={[styles.head, styles.gap]}>on the you page</Label>
-        <Micro style={styles.note}>what is listed under the greeting</Micro>
+        <Label style={[styles.head, styles.gap]}>at the foot of today</Label>
+        <Micro style={styles.note}>what people said on your work, and which kinds</Micro>
         <View style={styles.chips}>
           {HOME_BLOCKS.map(({ key, label }) => {
             const on = home.blocks.includes(key);

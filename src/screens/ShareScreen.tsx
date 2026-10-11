@@ -7,8 +7,7 @@ import { OverlayFrame } from '../components/Overlay';
 import { CARD_HEIGHT, CARD_WIDTH, ShareCard } from '../components/ShareCard';
 import { Label, Micro } from '../components/Type';
 import { useNav } from '../lib/nav';
-import { shareKindOf } from '../lib/shareData';
-import type { ScreenName } from '../shell/sections';
+import type { ShareKind } from '../lib/shareData';
 import { useSession } from '../shell/session';
 import { colors, radii, space, themed } from '../theme';
 
@@ -19,21 +18,20 @@ const OUT_HEIGHT = 1200;
 type Phase = 'idle' | 'working' | 'failed' | 'unavailable';
 
 /**
- * A view as an image to post. The card is drawn at its own size and shown
+ * A chart as an image to post. The card is drawn at its own size and shown
  * scaled to the phone, so what you see is exactly the frame that is sent;
  * `share` renders it to a 1600 × 1200 PNG and hands it to the system share
  * sheet, which is where posting, saving and sending all live.
  */
-export function ShareScreen({ view }: { view: ScreenName }) {
+export function ShareScreen({ kind, year: chosen }: { kind: ShareKind; year?: number }) {
   const nav = useNav();
   const { model, activity } = useSession();
   const { width } = useWindowDimensions();
-  const kind = shareKindOf(view) ?? 'year';
   const card = useRef<View>(null);
   const [phase, setPhase] = useState<Phase>('idle');
 
   const years = model ? model.years.map((entry) => entry.year).sort((a, b) => b - a) : [];
-  const [year, setYear] = useState(() => years[0] ?? new Date().getFullYear());
+  const [year, setYear] = useState(() => chosen ?? years[0] ?? new Date().getFullYear());
 
   useEffect(() => {
     Sharing.isAvailableAsync()

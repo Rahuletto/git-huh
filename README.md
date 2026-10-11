@@ -9,7 +9,7 @@ inbox you can clear from your phone.
 
 <p>
   <img src="docs/screenshots/today.png" width="24%" alt="The today section: a greeting, the widget's card with the year as dots, and one sentence about it">
-  <img src="docs/screenshots/inbox.png" width="24%" alt="The inbox: review requests, mentions and comments, each one swipeable">
+  <img src="docs/screenshots/inbox.png" width="24%" alt="The inbox: the review queue and assignments as two cards, then mentions and comments, each one swipeable">
   <img src="docs/screenshots/pulls.png" width="24%" alt="Open pull requests on one card per repository">
   <img src="docs/screenshots/year.png" width="24%" alt="A year of contributions as columns of dots dissolving at the top">
 </p>
@@ -21,13 +21,14 @@ screens, each laid out after a pin from a moodboard (an IBM poster, a
 correspondence drawer, a Sankey diagram, a weather app, letters on a
 spiral) and drawn in the home-screen widget's marks — one mono face, one ink,
 dots whose size is the data, a plus for today, a wave for a silence — in five
-sections on the system's own tab bar.
+sections on the system's own tab bar. Each section is one page you scroll,
+not a second row of tabs.
 
-| section | views | |
+| section | on the page, top to bottom | |
 |---|---|---|
-| **today** | you · now · weather · hours | the widget with room to breathe and a feed that keeps going, today in lit dots, your streak as a forecast, when in the day you commit |
-| **inbox** | recent · review · assigned | review requests, mentions, reviews and replies — swipe to mark done or snooze until morning; the review queue, longest wait first, with what moved since you looked; everything assigned to you across every repository |
-| **work** | pulls · brief · cycle · repos | your open pull requests, one read in full, time to merge, a deck of repositories |
+| **today** | you · today · hours · the feed | the widget with room to breathe, today in lit dots, your streak as a forecast, when in the day you commit, and a feed that keeps going |
+| **inbox** | review · assigned · recent | how many are waiting on your review and what is assigned to you, each a card with a dot for every wait; then review requests, mentions, reviews and replies — swipe to mark done or snooze until morning |
+| **work** | pulls · the brief · cycle · repos | your open pull requests, your descriptions read one after another, time to merge, a deck of repositories |
 | **year** | weeks · split · languages · years · people | every year of contributions, where they went, what they were written in, and who you reviewed with |
 | **ideas** | project ideas | a simple notebook saved on this device, with add, edit and delete |
 

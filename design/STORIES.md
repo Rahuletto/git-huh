@@ -72,11 +72,13 @@ one keeps those endings inside.
    → `inbox` empty and error states.
 9a. **I want to know who is waiting on me, and for how long** — counted from
    when they asked me, not from when they opened it — and how much reading
-   each one is before I open it. → `inbox · review`.
+   each one is before I open it. → `inbox`, the `review` tile → the queue.
 9b. **I want to know which of the ones I already reviewed have moved since.**
-   → `inbox · review` → `reviewed`, `3 new commits`.
+   → the `review` tile says `1 moved since you looked` → the queue → `reviewed`,
+   `3 new commits`.
 9c. **I want everything assigned to me in one place**, not one repository at
-   a time, with the one that has gone quiet standing out. → `inbox · assigned`.
+   a time, with the one that has gone quiet standing out. → `inbox`, the
+   `assigned` tile → the list.
 
 ### work — *what I am shipping*
 
@@ -92,7 +94,8 @@ one keeps those endings inside.
     Additions and deletions are banded as well as coloured, long lines scroll,
     big files start folded. → `pull` → `files`.
 14. **I want to skim my own descriptions one after another** without going back
-    to a list each time. → `brief`, paged from a bar pinned to the bottom.
+    to a list each time. → `work` → `the brief` → `read all in order`, paged
+    from a bar pinned to the bottom.
 15. **I want to know how long my pull requests actually take**, because the
     number I say out loud is wrong. → `cycle`.
 16. **I want my repositories ordered by when a commit was last written in
@@ -163,7 +166,7 @@ one keeps those endings inside.
              or paste a token ─┬─ verified → keystore → contributions request
                                └─ rejected → error line, form stays
            → loading wave (your own commit messages, from the pool)
-           → today · you
+           → today
 
 The wave is on screen before anything has been fetched, which is why the
 messages are a pool kept on the device rather than a request.
@@ -173,7 +176,8 @@ messages are a pool kept on the device rather than a request.
     home screen widget  → a commit of yours, travelling, and the dot field
       (no counts: they are on every screen in the app and a home screen is
        not where they were wanted)
-    → tap → today · now → 2 taps to anywhere else
+    → tap → today: the year at the top, today's count a thumb's scroll down
+    → 1 tap to any section
 
 ### triage
 
@@ -191,8 +195,8 @@ comes back by itself when someone writes on the thread again.
 
 ### reading one of yours, and someone else's
 
-    work · pulls → guide tab per repo → card → pull
-    work · brief → ← prev · n of N · next →   (skim descriptions in order)
+    work → pulls → card per repo → pull
+    work → the brief → read all in order → ← prev · n of N · next →
     pull · talk  → comment · approve · request changes
     pull · files → find · tap a line → comment on this line
     pull · checks → why (log tail) · re-run failed · approve and run · approve deploy
@@ -223,7 +227,7 @@ from silence.
 
 ### leaving
 
-    today · you → disconnect → widget cleared, pool cleared, keystore cleared
+    avatar → account → disconnect → widget cleared, pool cleared, keystore cleared
                 → the token form
 
 ---
@@ -253,8 +257,8 @@ is mostly *yes*, because this list is the brief the app was built to.
 | 15 | organise the inbox — swipe actions, folders | people ask for Spark-style swipes and custom notification folders by name | **yes** — swipe left `done`, right `snooze`; `snoozed` and `done` folders; anything written on again comes back |
 | 16 | make the small change from the phone — a branch, a file, a pull request | the one-line typo fix at a bus stop is the reason the app is open | **yes** — edit a file, then a new branch and pull request (through a fork if you cannot push), or a commit straight onto the branch |
 | 17 | comment on any line, not only changed ones | context lines are where half of review comments belong | **yes** — tap any line in `files` |
-| 18 | a review queue — what is waiting on me, oldest first | the inbox mixes requests with everything else | **yes** — `inbox · review`, waits counted from the request, with what moved since you reviewed |
-| 19 | everything assigned to me across repositories | GitHub's app files assignments per repository | **yes** — `inbox · assigned` |
+| 18 | a review queue — what is waiting on me, oldest first | the inbox mixes requests with everything else | **yes** — the `review` tile at the top of `inbox`, waits counted from the request, with what moved since you reviewed |
+| 19 | everything assigned to me across repositories | GitHub's app files assignments per repository | **yes** — the `assigned` tile at the top of `inbox` |
 | 20 | sign in without making a token | pasting a PAT is the first thing that stops people | **yes** — the device flow; a token still works |
 
 Still **no**: creating a *new* file or repository, merging, and anything in
@@ -298,13 +302,22 @@ The rail is a hamburger lying down: where you can go depends on where you
 already are, and nothing tells you what is on the other side.
 
 What replaced it is in `DESIGN.md` § Navigation — five sections, a bar that
-is always visible, and a segmented control for the views inside a section.
-The stories above are the argument for the grouping: story 6 is why `inbox`
-is a destination and not a paragraph under a greeting, and 9a–9c are why the
-queue and the assignments are views of it rather than of `work` — they are
-things waiting on you, not things you are shipping; stories 10–16 are why
-`pulls`, `brief`, `cycle` and `repos` are one place; stories 17–20a are why
-the whole retrospective is one tab you can ignore on a Tuesday.
+is always visible, and each section one page. The stories above are the
+argument for the grouping: story 6 is why `inbox` is a destination and not a
+paragraph under a greeting, and 9a–9c are why the queue and the assignments
+open the inbox's page rather than sit in `work` — they are things waiting on
+you, not things you are shipping; stories 10–16 are why `pulls`, `brief`,
+`cycle` and `repos` are one place; stories 17–20a are why the whole
+retrospective is one tab you can ignore on a Tuesday.
+
+For a while each section was a segmented control of its views over a
+horizontal pager, which is a tab bar inside a tab bar. It failed the walk and
+the queue both: the thing you came for was usually one label away, never on
+screen, and `now` and `weather` drew the same count twice without anyone
+noticing because nobody saw both at once. A section is now a page you scroll —
+the walk is answered by its top, the sofa by reading on — and a list too long
+for it is a card that says how many and how long they have waited, which is
+the half of story 9a you can get without opening anything.
 
 ---
 

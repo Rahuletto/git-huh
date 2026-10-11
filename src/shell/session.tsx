@@ -42,7 +42,7 @@ import { readSaved, writeSaved } from '../lib/store';
 import { stateOf, type Marks } from '../lib/triage';
 import { DEMO_TOKEN, tokenStore } from '../lib/token';
 import { clearWidget, syncWidget } from '../lib/widgetBridge';
-import { FLAT, hrefOf, SECTIONS, sectionOfPath } from './sections';
+import { hrefOf, SECTIONS, sectionOfPath } from './sections';
 
 /** undefined = restoring from the keystore, null = signed out. */
 export type TokenState = string | null | undefined;
@@ -69,7 +69,7 @@ export interface Session {
   toggleTogether: (login: string) => void;
   /** Ticked accounts that could not be read, and so are not in the sum. */
   missing: string[];
-  /** What the `you` page lists under the greeting. */
+  /** What `today` lists at its foot. */
   home: HomeSettings;
   setHome: (next: HomeSettings) => void;
   /** Forget an account that is not the one in use. */
@@ -86,15 +86,17 @@ export interface Session {
   triage: ReturnType<typeof useTriage>;
   activityState: ActivityState;
   activity: Activity;
+  /**
+   * Ask for the commit history now — `today` calls it once its `hours`
+   * block is near. `work` needs it on sight and asks by being open.
+   */
+  wantActivity: () => void;
   accounts: Account[];
   /** Commit subjects and their repositories, for the travelling strip. */
   lines: CommitLine[];
   /** Which section is on screen, from the route. */
   tab: number;
   goToTab: (index: number) => void;
-  /** One page per section, so a section is where you left it. */
-  pages: number[];
-  goToPage: (section: number, page: number) => void;
   /** Everything pushed over the sections, bottom first. */
   stack: Route[];
   nav: Nav;
@@ -143,14 +145,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const tab = sectionOfPath(pathname);
 
   const [token, setTokenState] = useState<TokenState>(undefined);
-  const [pages, setPages] = useState<number[]>(() => SECTIONS.map(() => 0));
   const [stack, setStack] = useState<Route[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
 
   const setToken = useCallback((next: string | null) => setTokenState(next), []);
 
   const section = SECTIONS[tab].key;
-  const view = SECTIONS[tab].views[pages[tab]]?.name ?? SECTIONS[tab].views[0].name;
 
   const contributions = useContributions(token ?? null);
   const scopes = useTokenScopes(token ?? null);
@@ -167,13 +167,14 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   // The demo keeps its marks under its own name, never under the real login
   // it happens to borrow.
   const triage = useTriage(token === DEMO_TOKEN ? 'demo' : login);
-  // Commit timestamps and PR bodies are a second, heavier request — asked
-  // for one view before anything needs them, never on launch.
-  const activityState = useActivity(
-    token ?? null,
-    login,
-    section === 'work' || view === 'weather' || view === 'clock',
-  );
+  // Commit timestamps and PR bodies are a second, heavier request — never
+  // on launch. `work` draws them at the top of its page, so it asks when it
+  // opens; `today` draws them half-way down, so it asks once it is scrolled
+  // (`wantActivity`). The demo's are on the device, so it has them at once.
+  const [activityWanted, setActivityWanted] = useState(false);
+  const wantActivity = useCallback(() => setActivityWanted(true), []);
+  const needActivity = section === 'work' || activityWanted || token === DEMO_TOKEN;
+  const activityState = useActivity(token ?? null, login, needActivity);
   const ownActivity =
     activityState.status === 'ready' ? activityState.activity : EMPTY_ACTIVITY;
 
@@ -208,12 +209,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           ),
     [accounts, login, token, together],
   );
-  const summed = useTogether(
-    own,
-    ownActivity,
-    others,
-    section === 'work' || view === 'weather' || view === 'clock',
-  );
+  const summed = useTogether(own, ownActivity, others, needActivity);
   const model = summed.model;
   const activity = summed.activity;
 
@@ -234,14 +230,6 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     (index: number) => router.navigate(hrefOf(index)),
     [router],
   );
-  const goToPage = useCallback(
-    (index: number, page: number) =>
-      setPages((current) =>
-        current.map((value, position) => (position === index ? page : value)),
-      ),
-    [],
-  );
-
   const open = useCallback((route: Route) => setStack((current) => [...current, route]), []);
   const replace = useCallback(
     (route: Route) => setStack((current) => [...current.slice(0, -1), route]),
@@ -385,21 +373,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     tokenStore.get().then((stored) => {
-      // Web preview shortcut: #demo or #demo/4 boots fake data on a view,
-      // numbered in reading order across every section.
+      // Web preview shortcut: #demo or #demo/2 boots fake data on a
+      // section, numbered from one in the order of the bar.
       if (stored == null && Platform.OS === 'web') {
         const hash = window.location.hash;
         if (hash.startsWith('#demo')) {
-          const pin = Number(hash.split('/')[1]);
-          const target = FLAT[pin - 1];
-          if (target) {
-            setPages((current) =>
-              current.map((page, index) =>
-                index === target.tab ? target.page : page,
-              ),
-            );
-            router.navigate(hrefOf(target.tab));
-          }
+          const target = Number(hash.split('/')[1]) - 1;
+          if (SECTIONS[target]) router.navigate(hrefOf(target));
           tokenStore.set(DEMO_TOKEN).then(() => setTokenState(DEMO_TOKEN));
           return;
         }
@@ -422,7 +402,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     searched.current = false;
     setLines([]);
     setRefreshWords(true);
-    setPages(SECTIONS.map(() => 0));
+    setActivityWanted(false);
     setStack([]);
     router.navigate(hrefOf(0));
   }, [router]);
@@ -486,12 +466,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       triage,
       activityState,
       activity,
+      wantActivity,
       accounts,
       lines: words,
       tab,
       goToTab,
-      pages,
-      goToPage,
       stack,
       nav,
       openEvent,
@@ -507,14 +486,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       contributions,
       disconnect,
       forget,
-      goToPage,
       goToTab,
       home,
       model,
       nav,
       openEvent,
       openUrl,
-      pages,
       people,
       prs,
       queue,
@@ -532,6 +509,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       toggleTogether,
       token,
       triage,
+      wantActivity,
       wanting,
     ],
   );

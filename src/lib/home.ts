@@ -1,7 +1,7 @@
 import type { SocialEvent } from './social';
 
 /**
- * What the `you` page lists under the greeting.
+ * What `today` lists at its foot, after the year and the hours.
  *
  * The page used to end in a stretch of empty paper with two buttons at the
  * bottom. It now carries a short feed, and which kinds of thing go in it is

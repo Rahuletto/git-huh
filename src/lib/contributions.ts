@@ -342,9 +342,13 @@ export interface Insights {
   /** Index into model.columns of the highest-total week. */
   peakWeekIndex: number;
   yesterdayCount: number;
-  /** This week's total vs the previous week's, as a signed percentage. */
+  /**
+   * The last seven days against the seven before them, as a signed
+   * percentage. Rolling, not the calendar week: on a Sunday the calendar's
+   * week is one day old, and one day against a whole week reads as a fall.
+   */
   velocity: number;
-  /** activeDays / total days in the visible window, 0-1. */
+  /** activeDays / the days in the window that have happened, 0-1. */
   consistency: number;
 }
 
@@ -364,9 +368,12 @@ export function insights(model: GitHubModel): Insights {
 }
 
 function computeInsights(model: GitHubModel): Insights {
-  const days = model.columns.flat();
-  const todayIndex = days.findIndex((day) => day.isToday);
-  const last = todayIndex >= 0 ? todayIndex : days.length - 1;
+  const all = model.columns.flat();
+  const todayIndex = all.findIndex((day) => day.isToday);
+  const last = todayIndex >= 0 ? todayIndex : all.length - 1;
+  // The calendar can run past today to the end of the week; those days have
+  // not happened, and averaging over them understates every rate.
+  const days = all.slice(0, last + 1);
 
   // A streak is alive until a whole day passes without work. Today is not
   // over, so an empty today does not break it: the count starts at yesterday.
@@ -416,10 +423,10 @@ function computeInsights(model: GitHubModel): Insights {
     }
   });
 
-  const thisWeek =
-    model.columns[model.columns.length - 1]?.reduce((sum, day) => sum + day.count, 0) ?? 0;
-  const lastWeek =
-    model.columns[model.columns.length - 2]?.reduce((sum, day) => sum + day.count, 0) ?? 0;
+  const sum = (from: number, to: number) =>
+    days.slice(Math.max(0, from), Math.max(0, to)).reduce((total, day) => total + day.count, 0);
+  const thisWeek = sum(days.length - 7, days.length);
+  const lastWeek = sum(days.length - 14, days.length - 7);
   const velocity =
     lastWeek > 0 ? ((thisWeek - lastWeek) / lastWeek) * 100 : thisWeek > 0 ? 100 : 0;
 
@@ -434,7 +441,7 @@ function computeInsights(model: GitHubModel): Insights {
     },
     bestDay,
     activeDays,
-    avgPerDay: days.length > 0 ? model.total / days.length : 0,
+    avgPerDay: days.length > 0 ? days.reduce((total, day) => total + day.count, 0) / days.length : 0,
     busiestWeekday,
     peakWeekday,
     peakWeekIndex,

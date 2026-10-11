@@ -330,8 +330,8 @@ const styles = themed(() =>
       gap: 8,
     },
     chips: {
-      // Wrapped rather than scrolled: the feed sits inside a horizontal pager,
-      // and a nested horizontal scroller there fights the page swipe.
+      // Wrapped rather than scrolled: every filter, and its count, in view
+      // at once — and the rows below already claim sideways drags.
       flexDirection: 'row',
       flexWrap: 'wrap',
       gap: 6,

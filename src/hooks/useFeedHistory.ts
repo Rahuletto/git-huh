@@ -23,7 +23,7 @@ interface Pages {
 }
 
 /**
- * The `you` page's feed, walked backwards one page of pull requests at a
+ * The feed at the foot of `today`, walked backwards one page of pull requests at a
  * time as it is scrolled. The first page is asked for as soon as the page is
  * open, so the feed runs past the inbox's short list without a tap.
  *

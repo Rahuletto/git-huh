@@ -1,23 +1,22 @@
-import { useMemo, type ReactElement } from 'react';
-import { StyleSheet, useWindowDimensions, View } from 'react-native';
+import { useEffect, useMemo, useState, type ReactElement } from 'react';
+import { Animated, Easing, StyleSheet, useWindowDimensions, View } from 'react-native';
 import Svg, { Circle, G, Path, Rect, Text as SvgText } from 'react-native-svg';
 
 import { LanguageChip } from '../components/LanguageChip';
 import { Card } from '../components/Card';
 import { Data, Label } from '../components/Type';
-import { useTicker } from '../hooks/useTicker';
 import type { GitHubModel, LanguageShare } from '../lib/contributions';
 import { languageMark } from '../lib/languageMarks';
 import { colors, fonts, themed } from '../theme';
-import { Page, ScreenHead } from './shared';
+import { Block, ScreenHead } from './shared';
 
 /** Turns of the spiral from the centre to the outer end. */
 const TURNS = 2.35;
 const THETA_MAX = TURNS * 2 * Math.PI;
 /** Points sampled along the spiral before it is cut into arc segments. */
 const STEPS = 200;
-/** Revolutions per second — one turn every fifty seconds. */
-const SPIN_HZ = 0.02;
+/** One turn every fifty seconds. */
+const PERIOD_MS = 50_000;
 const ON_SPIRAL = 14;
 /** Top languages that get a filled colour chip, as in the pin. */
 const CHIPS = 6;
@@ -28,40 +27,42 @@ const CHIPS = 6;
  * mark cut out of them — the first squared off, as a peak is — and distance
  * from the centre is rank.
  *
- * The spiral turns. It is the one screen in the app whose subject is
+ * The spiral turns. It is the one block in the app whose subject is
  * literally an orbit, and a still frame of it was only ever half the pin —
  * the eye is supposed to be walked inward along the line.
  */
 export function OrbitScreen({
   model,
   active = true,
+  onShare,
 }: {
   model: GitHubModel;
   active?: boolean;
+  onShare: () => void;
 }) {
   const { width } = useWindowDimensions();
   const size = Math.min(width - 72, 320);
-  const languages = model.languages.slice(0, ON_SPIRAL);
-  // Parked while the page is off screen: thirteen screens are mounted at
-  // once and only the one being looked at should be burning frames.
-  const seconds = useTicker(active && languages.length > 0);
-  const spin = seconds * SPIN_HZ * 2 * Math.PI;
+  const languages = useMemo(() => model.languages.slice(0, ON_SPIRAL), [model.languages]);
+  // Parked while the section is out of sight.
+  const turn = useTurn(active && languages.length > 0);
 
   return (
-    <Page>
-      <ScreenHead left="languages" right={`${model.languages.length} in play`} />
+    <Block>
+      <ScreenHead
+        action={{ hint: 'makes your languages an image to post', label: 'share', onPress: onShare }}
+        left="languages"
+        right={`${model.languages.length} in play`}
+      />
 
       <Card style={styles.stage}>
-        <Svg height={size} width={size}>
-          <Spiral languages={languages} size={size} spin={spin} />
-        </Svg>
+        <Spiral languages={languages} size={size} turn={turn} />
       </Card>
 
       <Card style={styles.legend}>
         {model.languages.slice(0, 8).map((language) => (
           <View key={language.name} style={styles.legendRow}>
             <LanguageChip name={language.name} size={22} />
-            <Data style={styles.legendName}>{language.name}</Data>
+            <Data style={styles.legendName}>{language.name.toLowerCase()}</Data>
             <Data style={styles.legendShare}>
               {(language.share * 100).toFixed(1)}%
             </Data>
@@ -71,8 +72,42 @@ export function OrbitScreen({
           <Label>no language data on these repos</Label>
         )}
       </Card>
-    </Page>
+    </Block>
   );
+}
+
+/**
+ * One turn, 0 → 1, over and over, on the native driver: the spiral is drawn
+ * once and the views holding it are rotated, so a frame costs nothing on the
+ * JavaScript thread — which matters on a page you are scrolling. Each lap
+ * resumes from where the last one was parked.
+ */
+function useTurn(active: boolean): Animated.Value {
+  const [turn] = useState(() => new Animated.Value(0));
+
+  useEffect(() => {
+    if (!active) return;
+    let parked = false;
+    const lap = (from: number) => {
+      turn.setValue(from);
+      Animated.timing(turn, {
+        duration: (1 - from) * PERIOD_MS,
+        easing: Easing.linear,
+        isInteraction: false,
+        toValue: 1,
+        useNativeDriver: true,
+      }).start(({ finished }) => {
+        if (finished && !parked) lap(0);
+      });
+    };
+    turn.stopAnimation((value) => lap(value % 1));
+    return () => {
+      parked = true;
+      turn.stopAnimation();
+    };
+  }, [active, turn]);
+
+  return turn;
 }
 
 interface Seat {
@@ -89,11 +124,11 @@ interface Seat {
 function Spiral({
   languages,
   size,
-  spin,
+  turn,
 }: {
   languages: LanguageShare[];
   size: number;
-  spin: number;
+  turn: Animated.Value;
 }) {
   const cx = size / 2;
   const cy = size / 2;
@@ -119,41 +154,59 @@ function Spiral({
     });
   }, [inner, languages, outer]);
 
-  // The line is geometry, not animation: it is drawn once and the whole
-  // group is rotated, so a frame costs one transform string rather than two
-  // hundred re-projected points.
   const segments = useMemo(
     () => arcs(cx, cy, inner, outer, seats),
     [cx, cy, inner, outer, seats],
   );
 
-  const degrees = (spin * 180) / Math.PI;
+  const spin = turn.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
+  const upright = turn.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '-360deg'] });
 
   return (
-    <>
-      <G transform={`rotate(${degrees.toFixed(2)} ${cx} ${cy})`}>
-        {segments.map((d, index) => (
-          <Path
-            d={d}
-            fill="none"
-            key={index}
-            opacity={0.4}
-            stroke={colors.ink}
-            strokeLinecap="round"
-            strokeWidth={1}
-          />
-        ))}
-      </G>
+    <View style={{ height: size, width: size }}>
+      <Animated.View style={[styles.layer, { transform: [{ rotate: spin }] }]}>
+        <Svg height={size} width={size}>
+          {segments.map((d, index) => (
+            <Path
+              d={d}
+              fill="none"
+              key={index}
+              opacity={0.4}
+              stroke={colors.ink}
+              strokeLinecap="round"
+              strokeWidth={1}
+            />
+          ))}
+        </Svg>
 
-      {/* Marks ride the same rotation but stay upright: a spinning devicon
-          reads as a glitch, not as an orbit. */}
-      {seats.map((seat) => {
-        const angle = seat.angle + spin;
-        const x = cx + Math.cos(angle) * seat.radius;
-        const y = cy + Math.sin(angle) * seat.radius;
-        return <Mark key={seat.language.name} seat={seat} x={x} y={y} />;
-      })}
-    </>
+        {/* Marks ride the same rotation but turn back against it to stay
+            upright: a spinning devicon reads as a glitch, not as an orbit.
+            Each is its own small canvas, so the one rotation can be undone
+            per mark. */}
+        {seats.map((seat) => {
+          const box = seat.half * 2 + 4;
+          return (
+            <Animated.View
+              key={seat.language.name}
+              style={[
+                styles.mark,
+                {
+                  height: box,
+                  left: cx + Math.cos(seat.angle) * seat.radius - box / 2,
+                  top: cy + Math.sin(seat.angle) * seat.radius - box / 2,
+                  transform: [{ rotate: upright }],
+                  width: box,
+                },
+              ]}
+            >
+              <Svg height={box} width={box}>
+                <Mark seat={seat} x={box / 2} y={box / 2} />
+              </Svg>
+            </Animated.View>
+          );
+        })}
+      </Animated.View>
+    </View>
   );
 }
 
@@ -277,6 +330,16 @@ const styles = themed(() =>
   StyleSheet.create({
     stage: {
       alignItems: 'center',
+    },
+    layer: {
+      bottom: 0,
+      left: 0,
+      position: 'absolute',
+      right: 0,
+      top: 0,
+    },
+    mark: {
+      position: 'absolute',
     },
     legend: {
       gap: 2,

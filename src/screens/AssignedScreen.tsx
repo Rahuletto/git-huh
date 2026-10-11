@@ -2,11 +2,15 @@ import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { Card } from '../components/Card';
+import { OverlayFrame } from '../components/Overlay';
+import { Tile } from '../components/Tile';
 import { Body, Label, Micro } from '../components/Type';
 import { WaitDot } from '../components/WaitDot';
 import type { Remote } from '../hooks/useRemote';
 import { dueLine, type Task, type Tasks } from '../lib/assigned';
+import { useNav } from '../lib/nav';
 import { savedAge } from '../lib/store';
+import { useSession } from '../shell/session';
 import { colors, fonts, radii, themed } from '../theme';
 import { ago, Chips, fmt, Page, ScreenHead, whyNot } from './shared';
 
@@ -18,6 +22,58 @@ type Filter = 'assigned' | 'filed';
 function quiet(iso: string): string {
   const age = ago(iso);
   return age === 'today' ? 'moved today' : `quiet ${age}`;
+}
+
+/**
+ * Your assignments on the inbox's page: how many, a dot for each sized by how
+ * long its thread has been quiet, and what is overdue. The card opens the
+ * list in full, with the issues you filed beside it.
+ */
+export function AssignedTile({ state }: { state: Remote<Tasks> }) {
+  const nav = useNav();
+  const tasks = state.status === 'ready' ? state.data : null;
+  const overdue = tasks
+    ? tasks.assigned.filter((task) => dueLine(task.milestone?.dueOn ?? null)?.endsWith('overdue'))
+        .length
+    : 0;
+  // Quietest first, so the dots read like the queue's: the longest wait on the left.
+  const quietest = tasks
+    ? [...tasks.assigned].sort((a, b) => Date.parse(a.updatedAt) - Date.parse(b.updatedAt))
+    : [];
+  const foot = !tasks
+    ? state.status === 'error'
+      ? whyNot(state.error)
+      : 'reading what is yours…'
+    : [
+        overdue > 0 ? `${overdue} overdue` : null,
+        quietest.length > 0 ? `quietest ${ago(quietest[0].updatedAt)}` : 'the desk is clear',
+        tasks.filedTotal > 0 ? `${fmt(tasks.filedTotal)} you filed` : null,
+      ]
+        .filter(Boolean)
+        .join(' · ');
+
+  return (
+    <Tile
+      figure={tasks ? tasks.assignedTotal : null}
+      foot={foot}
+      hint="opens everything assigned to you"
+      onPress={() => nav.open({ kind: 'assigned' })}
+      title="assigned"
+      unit="yours to do"
+      waits={quietest.map((task) => task.updatedAt)}
+    />
+  );
+}
+
+/** Assignments in full, pushed from the inbox's tile. */
+export function AssignedPage() {
+  const nav = useNav();
+  const { openUrl, tasks } = useSession();
+  return (
+    <OverlayFrame onBack={nav.close} where="inbox · assigned">
+      <AssignedScreen onOpen={openUrl} state={tasks} />
+    </OverlayFrame>
+  );
 }
 
 /**

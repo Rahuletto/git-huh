@@ -12,29 +12,6 @@ import type { Breakdown, LanguageShare, YearSummary } from './contributions';
 
 export type ShareKind = 'year' | 'weeks' | 'split' | 'languages' | 'years' | 'hours';
 
-/** Which card each view shares as; null for views that are lists, not charts. */
-export function shareKindOf(view: string): ShareKind | null {
-  switch (view) {
-    case 'hey':
-    case 'now':
-    case 'weather':
-    case 'dots':
-      return 'year';
-    case 'poster':
-      return 'weeks';
-    case 'flow':
-      return 'split';
-    case 'orbit':
-      return 'languages';
-    case 'archive':
-      return 'years';
-    case 'clock':
-      return 'hours';
-    default:
-      return null;
-  }
-}
-
 export interface Slice {
   label: string;
   value: number;

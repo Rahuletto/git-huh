@@ -7,12 +7,15 @@ import { DotRow } from '../components/DotRow';
 import { Data, Label, Micro } from '../components/Type';
 import { insights, type GitHubModel } from '../lib/contributions';
 import { colors, levels, space, themed } from '../theme';
-import { fmt, Page } from './shared';
+import { WeatherScreen } from './WeatherScreen';
+import { Block, fmt, ScreenHead } from './shared';
 
 /**
  * Today, at a glance, on the widget's cards: today's count lit up in the
- * widget's own dots, the week and the last thirty days as rows of them, and
- * the languages you write most.
+ * widget's own dots, the weather (the streak, the trend, the pace), the last
+ * seven days and the last thirty as rows of them, and the languages you
+ * write most. `now` and `weather` were two views of this one subject and drew
+ * today's count and the week twice; they are one block now.
  */
 export function NowScreen({ model }: { model: GitHubModel }) {
   const { width } = useWindowDimensions();
@@ -25,18 +28,22 @@ export function NowScreen({ model }: { model: GitHubModel }) {
   const upTo = todayAt >= 0 ? days.slice(0, todayAt + 1) : days;
   const week = upTo.slice(-7);
   const month = upTo.slice(-30);
+  const date = new Date()
+    .toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
+    .toLowerCase();
 
   return (
-    <Page>
-      <Card
-        figure={`yesterday ${fmt(derived.yesterdayCount)} · best ${fmt(derived.bestDay)}`}
-        title="today"
-      >
+    <Block>
+      <ScreenHead left="today" right={date} />
+
+      <Card figure={`yesterday ${fmt(derived.yesterdayCount)} · best ${fmt(derived.bestDay)}`}>
         <Numerals count={model.todayCount} width={inner} />
       </Card>
 
+      <WeatherScreen model={model} />
+
       <View style={styles.row}>
-        <Card style={styles.half} title="this week">
+        <Card style={styles.half} title="last 7 days">
           <DotRow
             height={26}
             labels={week.map((day) => WEEKDAY_INITIALS[new Date(`${day.date}T00:00:00`).getDay()])}
@@ -71,7 +78,7 @@ export function NowScreen({ model }: { model: GitHubModel }) {
           width={inner}
         />
       </Card>
-    </Page>
+    </Block>
   );
 }
 

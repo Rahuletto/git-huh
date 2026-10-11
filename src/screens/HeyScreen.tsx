@@ -4,60 +4,49 @@ import { Card } from '../components/Card';
 import { DotField } from '../components/DotField';
 import { Marquee } from '../components/Marquee';
 import { FeedRow } from '../components/SocialFeed';
-import { Body, Display, Label, Micro, Serif } from '../components/Type';
-import { useFeedHistory } from '../hooks/useFeedHistory';
+import { Body, Display, Micro, Serif } from '../components/Type';
+import type { useFeedHistory } from '../hooks/useFeedHistory';
 import type { SocialState } from '../hooks/useSocial';
 import { handleOf, insights, type GitHubModel } from '../lib/contributions';
 import { HOME_BLOCKS, homeEvents, type HomeSettings } from '../lib/home';
 import type { CommitLine } from '../lib/messageCache';
-import { useNav } from '../lib/nav';
 import type { SocialEvent } from '../lib/social';
 import { colors, fonts, space, themed } from '../theme';
-import { fmt, historyLevels, Page } from './shared';
+import { ActionPill, Block, fmt, historyLevels, ScreenHead } from './shared';
 
 /** The widget's card is 7 rows at up to 22dp a dot; so is this one. */
 const FIELD_ROWS = 7;
 const FIELD_PITCH = 21;
 
 /**
- * The first page is the home-screen widget, set in the app: a greeting, then
- * the widget's own card — your commit messages travelling across the top and
- * the last few months of days as dots under them, today the plus in the
- * corner — and one sentence that carries the year's figures.
- *
- * Under it, what people have been saying on your work, pull request comments
- * unless the account page says otherwise. It starts with the inbox's feed and
- * keeps going: scrolling pages in older pull requests, so it runs as far back
- * as the conversation does. The account itself lives behind the avatar.
+ * The top of `today` is the home-screen widget, set in the app: a greeting,
+ * then the widget's own card — your commit messages travelling across the
+ * top and the last few months of days as dots under them, today the plus in
+ * the corner — and one sentence that carries the year's figures. `share`
+ * makes the year a 4:3 image.
  */
 export function HeyScreen({
   model,
-  social,
-  home,
   lines,
   active,
-  onOpen,
-  onSettings,
+  onShare,
 }: {
   model: GitHubModel;
-  social: SocialState;
-  home: HomeSettings;
   lines: readonly CommitLine[];
   active: boolean;
-  onOpen: (event: SocialEvent) => void;
-  /** The account page, where the feed's kinds are chosen. */
-  onSettings: () => void;
+  onShare: () => void;
 }) {
   const { width } = useWindowDimensions();
   const derived = insights(model);
-  const nav = useNav();
-  const history = useFeedHistory(nav.token, nav.login, active && home.blocks.length > 0);
   const inner = width - space.gutter * 2 - space.card * 2;
 
   return (
-    <Page onEnd={history.more}>
+    <Block>
       <View style={styles.greeting}>
-        <Display style={styles.hey}>hey,</Display>
+        <View style={styles.greetingTop}>
+          <Display style={styles.hey}>hey,</Display>
+          <ActionPill hint="makes your year an image to post" label="share" onPress={onShare} />
+        </View>
         <Display adjustsFontSizeToFit numberOfLines={1}>
           {handleOf(model)}
         </Display>
@@ -90,15 +79,7 @@ export function HeyScreen({
           ? `${derived.currentStreak} day streak`
           : 'no streak today'}
       </Serif>
-
-      <HomeFeed
-        history={history}
-        home={home}
-        onOpen={onOpen}
-        onSettings={onSettings}
-        social={social}
-      />
-    </Page>
+    </Block>
   );
 }
 
@@ -109,10 +90,13 @@ const FALLBACK: CommitLine[] = [
 ];
 
 /**
- * Under the greeting, what people have been saying on your work. The inbox's
- * feed first, then the history as it pages in, the same comment once.
+ * At the foot of `today`, what people have been saying on your work — pull
+ * request comments unless the account page says otherwise. The inbox's feed
+ * first, then the history as it pages in, the same comment once: scrolling
+ * pages in older pull requests, so it runs as far back as the conversation
+ * does. It is the last block on the page because it has no end.
  */
-function HomeFeed({
+export function HomeFeed({
   social,
   history,
   home,
@@ -136,15 +120,11 @@ function HomeFeed({
   const oldest = rows[rows.length - 1];
 
   return (
-    <View style={styles.block}>
-      <View style={styles.blockHead}>
-        <Label numberOfLines={1} style={styles.blockTitle}>
-          {title}
-        </Label>
-        <Pressable accessibilityRole="button" hitSlop={10} onPress={onSettings}>
-          <Label style={styles.link}>change</Label>
-        </Pressable>
-      </View>
+    <Block>
+      <ScreenHead
+        action={{ hint: 'choose what is listed here', label: 'change', onPress: onSettings }}
+        left={title}
+      />
 
       {home.blocks.length === 0 && (
         <Micro style={styles.blockNote}>
@@ -182,7 +162,7 @@ function HomeFeed({
           )}
         </View>
       )}
-    </View>
+    </Block>
   );
 }
 
@@ -256,11 +236,16 @@ const styles = themed(() =>
       paddingHorizontal: 4,
       paddingTop: 6,
     },
+    greetingTop: {
+      alignItems: 'center',
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+    },
     hey: {
       color: colors.ink40,
     },
     widget: {
-      marginTop: 8,
+      marginTop: 6,
     },
     strip: {
       marginBottom: 14,
@@ -272,7 +257,7 @@ const styles = themed(() =>
       color: colors.ink70,
       fontSize: 15,
       lineHeight: 24,
-      marginTop: 10,
+      marginTop: 4,
       paddingHorizontal: 4,
     },
     figure: {
@@ -282,21 +267,6 @@ const styles = themed(() =>
     since: {
       color: colors.ink40,
       paddingHorizontal: 4,
-    },
-    block: {
-      gap: 8,
-      marginTop: 18,
-    },
-    blockHead: {
-      alignItems: 'baseline',
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      paddingBottom: 2,
-      paddingHorizontal: 4,
-    },
-    blockTitle: {
-      color: colors.ink,
-      flex: 1,
     },
     blockNote: {
       color: colors.ink40,

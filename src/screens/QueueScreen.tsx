@@ -1,15 +1,19 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Avatar } from '../components/Avatar';
 import { Card } from '../components/Card';
 import { DiffDots } from '../components/DiffDots';
+import { OverlayFrame } from '../components/Overlay';
 import { StateChip } from '../components/StateChip';
+import { Tile } from '../components/Tile';
 import { Body, Label, Micro } from '../components/Type';
 import { WaitDot } from '../components/WaitDot';
 import type { Remote } from '../hooks/useRemote';
 import type { QueuedPull, Queue, ReviewedPull } from '../lib/queue';
+import { useNav } from '../lib/nav';
 import { savedAge } from '../lib/store';
+import { useSession } from '../shell/session';
 import { colors, fonts, themed } from '../theme';
 import { ago, Chips, fmt, Page, ScreenHead, whyNot } from './shared';
 
@@ -22,6 +26,53 @@ type Filter = 'asked' | 'reviewed';
 function since(iso: string): string {
   const age = ago(iso);
   return age === 'today' ? 'today' : `${age} ago`;
+}
+
+/**
+ * The review queue on the inbox's page: how many are waiting on you, a dot
+ * for each sized by its wait, and what moved since you last looked. The card
+ * opens the queue in full.
+ */
+export function QueueTile({ state }: { state: Remote<Queue> }) {
+  const nav = useNav();
+  const queue = state.status === 'ready' ? state.data : null;
+  const moved = queue ? queue.reviewed.filter((pr) => pr.since > 0).length : 0;
+  const foot = !queue
+    ? state.status === 'error'
+      ? whyNot(state.error)
+      : 'reading the queue…'
+    : queue.asked.length === 0
+      ? moved > 0
+        ? `nobody waiting · ${moved} you reviewed moved`
+        : 'nobody is waiting on you'
+      : `oldest asked ${ago(queue.asked[0].askedAt)}${moved > 0 ? ` · ${moved} moved since you looked` : ''}`;
+
+  return (
+    <Tile
+      figure={queue ? queue.askedTotal : null}
+      foot={foot}
+      hint="opens the review queue"
+      onPress={() => nav.open({ kind: 'queue' })}
+      title="review"
+      unit="waiting on you"
+      waits={queue ? queue.asked.map((pr) => pr.askedAt) : []}
+    />
+  );
+}
+
+/** The queue in full, pushed from the inbox's tile. */
+export function QueuePage() {
+  const nav = useNav();
+  const { queue } = useSession();
+  const open = useCallback(
+    (pr: { repo: string; number: number }) => nav.open({ kind: 'pull', repo: pr.repo, number: pr.number }),
+    [nav],
+  );
+  return (
+    <OverlayFrame onBack={nav.close} where="inbox · review">
+      <QueueScreen onOpen={open} state={queue} />
+    </OverlayFrame>
+  );
 }
 
 /**

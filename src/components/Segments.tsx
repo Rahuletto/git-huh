@@ -5,20 +5,17 @@ import { Squiggle } from './Squiggle';
 import { Label } from './Type';
 
 /**
- * The second level: the few views inside one section.
+ * The views of one pushed page about one thing — a pull request's brief,
+ * talk, diff and checks.
  *
- * A segmented control switches between views of *the same* content, so it
- * sits at the top of the section it belongs to and never carries more than
- * four or five words. The section itself is the bar at the bottom.
+ * Only a pushed page has these. A section never does: the bar at the bottom
+ * is the one row of tabs under a section, and a second row inside it was a
+ * tab bar in a tab bar (LANGUAGE §7). A pushed page covers the bar, so here
+ * this row is the only one on screen.
  *
  * Selected is the widget's own mark: the word in full ink with the app's
  * wave under it, the others in grey — the same two weights as the widget's
- * `repo ~~~ message` strip. The bottom bar keeps its filled pill, so the two
- * levels never read as the same control.
- *
- * The row **wraps, it does not scroll**: every view is inside the section's
- * horizontal pager, and a nested horizontal scroller loses its drag to the
- * page swipe. This has been fixed twice; see LANGUAGE §7.
+ * `repo ~~~ message` strip. The row wraps rather than scrolls.
  */
 export function Segments({
   items,

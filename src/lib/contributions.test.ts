@@ -112,6 +112,26 @@ test('the longest streak and where it sits', () => {
   assert.equal(found.activeDays, 5);
 });
 
+test('velocity is the last seven days against the seven before, not a calendar week', () => {
+  // Fifteen days cut into calendar weeks of 7, 7 and 1: the old reading put
+  // today alone against a whole week and called it a collapse.
+  const found = insights(model([...new Array(8).fill(2), ...new Array(7).fill(1)]));
+  assert.equal(found.velocity, -50);
+});
+
+test('velocity from nothing is a rise, and nothing from nothing is level', () => {
+  assert.equal(insights(model([...new Array(7).fill(0), 0, 0, 0, 0, 0, 0, 3])).velocity, 100);
+  assert.equal(insights(model(new Array(14).fill(0))).velocity, 0);
+});
+
+test('the average and the active share count only the days that have happened', () => {
+  const ahead = new Date(NOW);
+  ahead.setDate(NOW.getDate() + 2);
+  const found = insights(model([2, 2, 0, 0], ahead));
+  assert.equal(found.avgPerDay, 2);
+  assert.equal(found.consistency, 1);
+});
+
 test('insights are computed once per model', () => {
   const m = model([1, 2]);
   assert.equal(insights(m), insights(m));

@@ -8,10 +8,14 @@ import { Body, Label } from '../../src/components/Type';
 import { NavContext, type Route } from '../../src/lib/nav';
 import { tokenStore } from '../../src/lib/token';
 import { AccountScreen } from '../../src/screens/AccountScreen';
+import { AssignedPage } from '../../src/screens/AssignedScreen';
+import { BriefPage } from '../../src/screens/BriefScreen';
 import { FileScreen } from '../../src/screens/FileScreen';
 import { LoadingScreen } from '../../src/screens/LoadingScreen';
 import { NewIssueScreen } from '../../src/screens/NewIssueScreen';
+import { PeoplePage } from '../../src/screens/PeopleScreen';
 import { PullScreen } from '../../src/screens/PullScreen';
+import { QueuePage } from '../../src/screens/QueueScreen';
 import { RepoScreen } from '../../src/screens/RepoScreen';
 import { ShareScreen } from '../../src/screens/ShareScreen';
 import { ThreadScreen } from '../../src/screens/ThreadScreen';
@@ -38,7 +42,15 @@ const RouteView = memo(function RouteView({ route }: { route: Route }) {
     case 'account':
       return <AccountScreen />;
     case 'share':
-      return <ShareScreen view={route.view} />;
+      return <ShareScreen kind={route.card} year={route.year} />;
+    case 'queue':
+      return <QueuePage />;
+    case 'assigned':
+      return <AssignedPage />;
+    case 'brief':
+      return <BriefPage />;
+    case 'people':
+      return <PeoplePage />;
     case 'add-account':
       return null;
   }
@@ -56,9 +68,13 @@ function routeKey(route: Route): string {
       return `${route.kind}:${route.repo}`;
     case 'add-account':
     case 'account':
+    case 'queue':
+    case 'assigned':
+    case 'brief':
+    case 'people':
       return route.kind;
     case 'share':
-      return `share:${route.view}`;
+      return `share:${route.card}`;
   }
 }
 
@@ -182,10 +198,10 @@ export default function TabsLayout() {
         ))}
       </NativeTabs>
 
-      {/* Over the tabs rather than inside one: the detail pages have their
-          own horizontal scrollers, and nested in a pager every one of them
-          would lose its drag to the page swipe. Lower pages stay mounted,
-          hidden, so back returns to them as they were. */}
+      {/* Over the tabs rather than inside one, like a pushed screen on any
+          phone: the bar belongs to the sections, and a detail page has its
+          own back. Lower pages stay mounted, hidden, so back returns to them
+          as they were. */}
       {stack.map((route, index) => (
         <View
           key={`${index}-${routeKey(route)}`}

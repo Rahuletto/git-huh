@@ -386,7 +386,7 @@ export interface SocialPage {
  * last few words on each — because it is also the background check. Under
  * the greeting that made the page stop after a screenful. This walks back
  * through every pull request you have written, open or not, newest activity
- * first, and reads far more of each one; the `you` page asks for the next
+ * first, and reads far more of each one; `today` asks for the next
  * page as it is scrolled.
  */
 export async function fetchSocialPage(

@@ -7,23 +7,83 @@ import { GitHubError } from '../lib/github';
 import { colors, radii, space, themed } from '../theme';
 
 /**
- * Every screen opens with the same two-part caption — a name on the left and
+ * Every block opens with the same two-part caption — a name on the left and
  * a figure on the right — which is what lets ten very different pin layouts
- * still read as one app.
+ * still read as one app. On a section's page it is also what divides one
+ * block from the next.
+ *
+ * `action` is the one thing the block can do — `share` on a chart — and sits
+ * after the figure as a small pill, because pills are actions.
  */
-export function ScreenHead({ left, right }: { left: string; right?: string }) {
+export function ScreenHead({
+  left,
+  right,
+  action,
+}: {
+  left: string;
+  right?: string;
+  action?: { label: string; hint: string; onPress: () => void };
+}) {
   return (
     <View style={styles.head}>
-      <Label style={styles.headLeft}>{left}</Label>
-      {right ? <Label>{right}</Label> : null}
+      <Label numberOfLines={1} style={styles.headLeft}>
+        {left}
+      </Label>
+      {right ? <Label numberOfLines={1}>{right}</Label> : null}
+      {action ? <ActionPill {...action} /> : null}
     </View>
   );
 }
 
+/** A small outlined pill that does one thing — `share`, `change`. */
+export function ActionPill({
+  label,
+  hint,
+  onPress,
+}: {
+  label: string;
+  hint: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityHint={hint}
+      accessibilityRole="button"
+      hitSlop={8}
+      onPress={onPress}
+      style={styles.action}
+    >
+      <Label style={styles.actionLabel}>{label}</Label>
+    </Pressable>
+  );
+}
+
+/**
+ * The way from a block's head to the whole list: `all 12 waiting →`. A
+ * section's page shows the first few of anything long and pushes the rest,
+ * so the page stays one page.
+ */
+export function More({ label, onPress }: { label: string; onPress: () => void }) {
+  return (
+    <Pressable accessibilityRole="button" onPress={onPress} style={styles.more}>
+      <Label style={styles.moreLabel}>{label} →</Label>
+    </Pressable>
+  );
+}
+
+/**
+ * One block on a section's page: its head and its cards, ten apart. The page
+ * puts more room between blocks than a block puts between its cards, so the
+ * heads read as the dividers they are.
+ */
+export function Block({ children }: { children: ReactNode }) {
+  return <View style={styles.block}>{children}</View>;
+}
+
 /**
  * A screen's filter: outlined pills, the one in force filled, each carrying
- * its count (LANGUAGE §7 — the count belongs on the control). They wrap;
- * they never scroll sideways inside a pager.
+ * its count (LANGUAGE §7 — the count belongs on the control). They wrap,
+ * so every choice is in view; they never scroll sideways.
  */
 export function Chips<T extends string>({
   items,
@@ -62,6 +122,8 @@ export function Page({
   gutter = true,
   fill = false,
   onEnd,
+  onDeep,
+  blocks = false,
 }: {
   children: ReactNode;
   background?: string;
@@ -74,22 +136,35 @@ export function Page({
   fill?: boolean;
   /**
    * Called as the bottom of the page comes within a screen of view — the
-   * `you` page's feed pages in older history with it.
+   * `today` page's feed pages in older history with it.
    */
   onEnd?: () => void;
+  /**
+   * Called once the page has been scrolled half a screen down — the `today`
+   * page asks for the commit history its `hours` block needs then, rather
+   * than on launch.
+   */
+  onDeep?: () => void;
+  /** Blocks rather than cards: a section's page spaces its blocks wider. */
+  blocks?: boolean;
 }) {
+  const watch = onEnd != null || onDeep != null;
   return (
     <ScrollView
       onScroll={
-        onEnd
+        watch
           ? ({ nativeEvent: { contentOffset, contentSize, layoutMeasurement } }) => {
-              if (contentOffset.y + layoutMeasurement.height * 2 >= contentSize.height) onEnd();
+              if (onDeep && contentOffset.y > layoutMeasurement.height / 2) onDeep();
+              if (onEnd && contentOffset.y + layoutMeasurement.height * 2 >= contentSize.height) {
+                onEnd();
+              }
             }
           : undefined
       }
-      scrollEventThrottle={onEnd ? 250 : undefined}
+      scrollEventThrottle={watch ? 250 : undefined}
       contentContainerStyle={[
         styles.page,
+        blocks && styles.blocks,
         fill && styles.fill,
         gutter && { paddingHorizontal: space.gutter },
       ]}
@@ -166,14 +241,44 @@ export function onColor(background: string): string {
 const styles = themed(() =>
   StyleSheet.create({
     head: {
-      alignItems: 'baseline',
+      alignItems: 'center',
       flexDirection: 'row',
+      gap: 10,
       justifyContent: 'space-between',
-      paddingBottom: 12,
+      minHeight: 26,
+      paddingBottom: 2,
       paddingHorizontal: 4,
     },
     headLeft: {
       color: colors.ink,
+      flex: 1,
+    },
+    action: {
+      borderColor: colors.hairStrong,
+      borderRadius: radii.pill,
+      borderWidth: 1,
+      paddingHorizontal: 10,
+      paddingVertical: 3,
+    },
+    actionLabel: {
+      color: colors.ink,
+    },
+    more: {
+      alignItems: 'center',
+      borderColor: colors.hairStrong,
+      borderRadius: radii.pill,
+      borderWidth: 1,
+      paddingHorizontal: 16,
+      paddingVertical: 11,
+    },
+    moreLabel: {
+      color: colors.ink,
+    },
+    block: {
+      gap: 10,
+    },
+    blocks: {
+      gap: 34,
     },
     chips: {
       flexDirection: 'row',
