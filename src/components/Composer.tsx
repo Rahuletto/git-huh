@@ -12,10 +12,20 @@ export interface ComposerAction {
   primary?: boolean;
   /** Approving says enough on its own; everything else needs words. */
   allowEmpty?: boolean;
+  /**
+   * What the pill says after the first press. Anything that cannot be taken
+   * back — merge, delete — is pressed twice: once to arm, once to send.
+   */
+  confirm?: string;
+  /** A toggle in its on state — starred, watching, your reaction. */
+  on?: boolean;
+  /** Not available right now, for a reason the screen says nearby. */
+  disabled?: boolean;
 }
 
 type Phase =
   | { kind: 'idle' }
+  | { kind: 'armed'; action: string }
   | { kind: 'sending'; action: string }
   | { kind: 'sent'; note: string }
   | { kind: 'failed'; note: string };
@@ -28,6 +38,10 @@ type Phase =
  * honest: the button names the thing it does (`approve`, `request changes`,
  * `comment on line 42`), nothing is sent until you press it, and a failure
  * leaves your text in the box rather than eating it.
+ *
+ * `bare` is the same row without the box, for the writes that are only a
+ * verb: merge, star, lock, a reaction. A form that has fields of its own puts
+ * them above a bare composer and reads them in `onSubmit`.
  */
 export function Composer({
   placeholder,
@@ -36,22 +50,38 @@ export function Composer({
   doing = 'that',
   demo = false,
   compact = false,
+  bare = false,
+  quiet = false,
+  initial = '',
+  onCancel,
 }: {
-  placeholder: string;
+  placeholder?: string;
   actions: ComposerAction[];
   /** Resolves with the line to show when it worked. Throws when it did not. */
   onSubmit: (action: string, text: string) => Promise<string>;
   doing?: string;
   demo?: boolean;
   compact?: boolean;
+  /** No box: the row of verbs alone. */
+  bare?: boolean;
+  /** Say nothing when it worked — a reaction is its own receipt. */
+  quiet?: boolean;
+  /** What is in the box to begin with — an edit starts from what was said. */
+  initial?: string;
+  /** A `cancel` pill, for a box opened to edit something. */
+  onCancel?: () => void;
 }) {
-  const [text, setText] = useState('');
+  const [text, setText] = useState(initial);
   const [phase, setPhase] = useState<Phase>({ kind: 'idle' });
   const busy = phase.kind === 'sending';
 
   const send = async (action: ComposerAction) => {
-    if (busy) return;
-    if (!action.allowEmpty && text.trim().length === 0) return;
+    if (busy || action.disabled) return;
+    if (!bare && !action.allowEmpty && text.trim().length === 0) return;
+    if (action.confirm && !(phase.kind === 'armed' && phase.action === action.key)) {
+      setPhase({ kind: 'armed', action: action.key });
+      return;
+    }
     setPhase({ kind: 'sending', action: action.key });
     try {
       if (demo) {
@@ -59,15 +89,16 @@ export function Composer({
         return;
       }
       const note = await onSubmit(action.key, text.trim());
-      setText('');
-      setPhase({ kind: 'sent', note });
+      if (!bare) setText('');
+      setPhase(quiet ? { kind: 'idle' } : { kind: 'sent', note });
     } catch (error) {
       setPhase({ kind: 'failed', note: explain(error, doing) });
     }
   };
 
   return (
-    <View style={[styles.box, compact && styles.compact]}>
+    <View style={[styles.box, compact && styles.compact, bare && styles.bare]}>
+      {!bare && (
       <TextInput
         editable={!busy}
         multiline
@@ -81,28 +112,42 @@ export function Composer({
         textAlignVertical="top"
         value={text}
       />
+      )}
       <View style={styles.actions}>
         {actions.map((action) => {
-          const disabled = busy || (!action.allowEmpty && text.trim().length === 0);
+          const disabled =
+            busy || action.disabled || (!bare && !action.allowEmpty && text.trim().length === 0);
+          const armed = phase.kind === 'armed' && phase.action === action.key;
+          const filled = action.primary || action.on || armed;
           return (
             <Pressable
               accessibilityRole="button"
-              accessibilityState={{ disabled, busy: busy && phase.action === action.key }}
+              accessibilityState={{
+                disabled,
+                busy: busy && phase.action === action.key,
+                ...(action.on !== undefined ? { selected: action.on } : {}),
+              }}
               disabled={disabled}
               key={action.key}
               onPress={() => send(action)}
-              style={[
-                styles.pill,
-                action.primary && styles.primary,
-                disabled && styles.disabled,
-              ]}
+              // Border and fill change together: see the corner-radius trap.
+              style={[styles.pill, filled && styles.primary, disabled && styles.disabled]}
             >
-              <Label style={action.primary ? styles.primaryLabel : styles.label}>
-                {busy && phase.action === action.key ? 'sending…' : action.label}
+              <Label style={filled ? styles.primaryLabel : styles.label}>
+                {busy && phase.action === action.key
+                  ? 'sending…'
+                  : armed
+                    ? (action.confirm ?? action.label)
+                    : action.label}
               </Label>
             </Pressable>
           );
         })}
+        {onCancel && (
+          <Pressable accessibilityRole="button" disabled={busy} onPress={onCancel} style={styles.pill}>
+            <Label style={styles.label}>cancel</Label>
+          </Pressable>
+        )}
       </View>
       {phase.kind === 'sent' && <Micro style={styles.sent}>{phase.note}</Micro>}
       {phase.kind === 'failed' && <Micro style={styles.failed}>{phase.note}</Micro>}
@@ -118,6 +163,11 @@ const styles = themed(() =>
       gap: 10,
       marginTop: 22,
       paddingTop: 12,
+    },
+    bare: {
+      borderTopWidth: 0,
+      marginTop: 10,
+      paddingTop: 0,
     },
     compact: {
       borderTopColor: colors.hair,

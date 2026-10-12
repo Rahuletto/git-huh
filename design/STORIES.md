@@ -134,6 +134,26 @@ one keeps those endings inside.
     request.
 31. **I want to open an issue the way the maintainers asked for it.** →
     repository → `issues` → `new issue`, templates and forms.
+32. **I want to merge it from the bus once the checks are green**, by the
+    method the repository allows, and delete the branch afterwards. →
+    `pull` → `talk` → the merge box.
+33. **I want to finish the review conversation**: answer inside a thread,
+    resolve it, react with a `+1` instead of writing one. → under each
+    comment.
+34. **I want to triage without the side column**: labels, assignees,
+    reviewers, milestone, close as not planned. → `pull` → `the brief` →
+    details; `thread` → details.
+35. **I want to run the deploy workflow, or cancel the run I started by
+    mistake.** → repository → `actions`.
+36. **I want to star the thing someone linked me, and follow the person who
+    wrote it.** → repository → `☆ star`; any `~name` → `follow`.
+37. **I want to cut the release I just merged.** → repository → `releases`
+    → `new release`, notes written from the merged pull requests.
+38. **I want to find a repository, an issue or a person I half remember.** →
+    `search github`.
+
+`ACTIONS.md` is the whole list: every action GitHub has, by object, and where
+each one is, or why it is not here.
 
 ### the account
 
@@ -261,8 +281,12 @@ is mostly *yes*, because this list is the brief the app was built to.
 | 19 | everything assigned to me across repositories | GitHub's app files assignments per repository | **yes** — the `assigned` tile at the top of `inbox` |
 | 20 | sign in without making a token | pasting a PAT is the first thing that stops people | **yes** — the device flow; a token still works |
 
-Still **no**: creating a *new* file or repository, merging, and anything in
-repository settings. None of them was on anyone's list above the fold.
+Merging, new files, new repositories, releases, branches, reactions,
+labels and the rest of the triage column were added later (stories 32–38),
+when the app was asked to be able to do anything GitHub can. Still **no**:
+anything in repository settings, deleting or transferring a repository, and
+GitHub's own notifications list, which needs a scope the app does not ask for.
+`ACTIONS.md` has every case and the reason.
 
 ## 5. What people hate about the GitHub app
 

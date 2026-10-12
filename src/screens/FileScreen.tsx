@@ -11,14 +11,21 @@ import {
   View,
 } from 'react-native';
 
+import { Composer } from '../components/Composer';
 import { OverlayFrame, SavedNote } from '../components/Overlay';
 import { Body, Label, Micro } from '../components/Type';
 import { useRemote } from '../hooks/useRemote';
-import { demoFile } from '../lib/demo';
+import { demoFile, demoRepoInfo } from '../lib/demo';
 import { useNav } from '../lib/nav';
 import { explain } from '../lib/rest';
-import { fetchFile, type RepoFile } from '../lib/repo';
-import { commitDirect, encodePath, proposeChange, type ProposalResult } from '../lib/writes';
+import { fetchFile, fetchRepoInfo, type RepoFile } from '../lib/repo';
+import {
+  commitDirect,
+  deleteFile,
+  encodePath,
+  proposeChange,
+  type ProposalResult,
+} from '../lib/writes';
 import { colors, fonts, radii, space, themed, tint } from '../theme';
 
 /** IBM Plex Mono at 11pt, measured — the width of one column of code. */
@@ -58,6 +65,16 @@ export function FileScreen({
       demo,
     },
   );
+  // Whether this account can push here, which is who may delete a file. The
+  // repository page saved the same answer under the same key.
+  const infoDemo = useMemo(() => (nav.demo ? demoRepoInfo(repo) : undefined), [nav.demo, repo]);
+  const info = useRemote(
+    nav.token ? `${nav.token}|info|${repo}` : null,
+    (signal) => fetchRepoInfo(nav.token ?? '', repo, signal),
+    { cacheKey: nav.login ? `${nav.login.toLowerCase()}-repo2-${repo}` : null, demo: infoDemo },
+  );
+  const canWrite =
+    info.status === 'ready' && ['ADMIN', 'MAINTAIN', 'WRITE'].includes(info.data?.permission ?? '');
   const [editing, setEditing] = useState(false);
   const file = state.status === 'ready' ? state.data : null;
   const name = path.split('/').pop() ?? path;
@@ -87,6 +104,26 @@ export function FileScreen({
             </Pressable>
             {!editable && file.text != null && (
               <Micro style={styles.footNote}>too big to edit on a phone</Micro>
+            )}
+            {canWrite && (
+            <View style={styles.footDelete}>
+              <Composer
+                actions={[{ key: 'delete', label: 'delete', confirm: `delete ${name}?` }]}
+                bare
+                demo={nav.demo}
+                doing="that delete"
+                onSubmit={async () => {
+                  await deleteFile(nav.token ?? '', repo, {
+                    path,
+                    sha: file.sha,
+                    message: `Delete ${name}`,
+                    branch: file.ref,
+                  });
+                  nav.close();
+                  return 'deleted';
+                }}
+              />
+            </View>
             )}
           </View>
         ) : null
@@ -386,6 +423,10 @@ function Editor({
 
 const styles = themed(() =>
   StyleSheet.create({
+    footDelete: {
+      marginLeft: 'auto',
+      marginTop: -10,
+    },
     reader: {
       flex: 1,
     },

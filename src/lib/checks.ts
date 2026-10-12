@@ -211,3 +211,112 @@ export async function reviewDeployments(
     body: { environment_ids: environmentIds, state, comment: comment || state },
   });
 }
+
+// --- a repository's actions -------------------------------------------------
+
+/** Every job again, not just the red ones. */
+export async function rerunAll(token: string, repo: string, runId: number) {
+  await rest(token, `/repos/${repo}/actions/runs/${runId}/rerun`, { method: 'POST' });
+}
+
+export async function cancelRun(token: string, repo: string, runId: number) {
+  await rest(token, `/repos/${repo}/actions/runs/${runId}/cancel`, { method: 'POST' });
+}
+
+export interface Workflow {
+  id: number;
+  name: string;
+  path: string;
+  state: string;
+}
+
+const workflowsSchema = z.object({
+  workflows: z.array(
+    z.object({ id: z.number(), name: z.string(), path: z.string(), state: z.string() }),
+  ),
+});
+
+export async function listWorkflows(
+  token: string,
+  repo: string,
+  signal?: AbortSignal,
+): Promise<Workflow[]> {
+  const data = await rest(token, `/repos/${repo}/actions/workflows?per_page=50`, {
+    schema: workflowsSchema,
+    signal,
+  });
+  return data.workflows;
+}
+
+export interface RepoRun extends WorkflowRun {
+  branch: string;
+  title: string;
+  createdAt: string;
+  actor: string;
+}
+
+const repoRunsSchema = z.object({
+  workflow_runs: z.array(
+    z.object({
+      id: z.number(),
+      name: z.string().nullable(),
+      status: z.string().nullable(),
+      conclusion: z.string().nullable(),
+      event: z.string(),
+      html_url: z.string(),
+      head_branch: z.string().nullable(),
+      display_title: z.string().nullable().optional(),
+      created_at: z.string(),
+      actor: z.object({ login: z.string() }).nullable(),
+    }),
+  ),
+});
+
+export async function listRuns(token: string, repo: string, signal?: AbortSignal): Promise<RepoRun[]> {
+  const data = await rest(token, `/repos/${repo}/actions/runs?per_page=20`, {
+    schema: repoRunsSchema,
+    signal,
+  });
+  return data.workflow_runs.map((run) => ({
+    id: run.id,
+    name: run.name ?? 'workflow',
+    status: run.status ?? 'unknown',
+    conclusion: run.conclusion,
+    event: run.event,
+    url: run.html_url,
+    branch: run.head_branch ?? '',
+    title: run.display_title ?? run.name ?? '',
+    createdAt: run.created_at,
+    actor: run.actor?.login ?? 'ghost',
+  }));
+}
+
+/**
+ * Run a workflow that has a `workflow_dispatch` trigger, on a branch. Inputs
+ * are passed as written; a workflow with required inputs that are missing is
+ * refused by GitHub with a message that says which.
+ */
+export async function dispatchWorkflow(
+  token: string,
+  repo: string,
+  workflowId: number,
+  ref: string,
+  inputs: Record<string, string> = {},
+) {
+  await rest(token, `/repos/${repo}/actions/workflows/${workflowId}/dispatches`, {
+    method: 'POST',
+    body: { ref, inputs },
+  });
+}
+
+/** `key=value` lines, the way a dispatch's inputs are typed on a phone. */
+export function parseInputs(text: string): Record<string, string> {
+  const inputs: Record<string, string> = {};
+  for (const line of text.split('\n')) {
+    const at = line.indexOf('=');
+    if (at <= 0) continue;
+    const key = line.slice(0, at).trim();
+    if (key) inputs[key] = line.slice(at + 1).trim();
+  }
+  return inputs;
+}

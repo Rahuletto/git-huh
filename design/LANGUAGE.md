@@ -231,6 +231,14 @@ until it is pressed, the result is said in words in `yes` or `no`, and a
 failure keeps the text. The words for a failure name the one thing that
 would change it — the scope, the connection, the token.
 
+A write that is only a verb uses the same composer without its box (`bare`):
+merge, star, lock, a reaction. A toggle is a filled pill while it is on.
+Anything that cannot be undone is **pressed twice**: the first press fills
+the pill and turns its label into the question (`delete it?`), and only the
+second sends it. Reactions are **words** (`+1 3`, `heart 1`, `rocket`), never
+emoji, because a coloured glyph would be the loudest mark on a page with one
+ink.
+
 **Local ideas.** The notebook uses one multiline input and an explicit save
 button. It clears only after the device has saved successfully; failures
 keep the draft. Plain cards, edit and delete actions, no extra filters.

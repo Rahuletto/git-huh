@@ -12,11 +12,15 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ChecksPanel } from '../components/ChecksPanel';
+import { CommentTools } from '../components/CommentTools';
 import { Composer } from '../components/Composer';
+import { Details } from '../components/Details';
 import { Diff } from '../components/Diff';
 import { DiffDots } from '../components/DiffDots';
 import { Markdown } from '../components/Markdown';
+import { MergeBox } from '../components/MergeBox';
 import { SavedNote } from '../components/Overlay';
+import { Reactions } from '../components/Reactions';
 import { Segments } from '../components/Segments';
 import { Squiggle } from '../components/Squiggle';
 import { StateChip } from '../components/StateChip';
@@ -25,7 +29,14 @@ import { usePullDetail } from '../hooks/usePullDetail';
 import { useNav } from '../lib/nav';
 import { parsePatch, type PullComment, type PullDetailFull } from '../lib/pullDetail';
 import { explain } from '../lib/rest';
-import { addComment, commentOnLine, submitReview } from '../lib/writes';
+import {
+  addComment,
+  commentOnLine,
+  dismissReview,
+  replyToThread,
+  setThreadResolved,
+  submitReview,
+} from '../lib/writes';
 import { colors, fonts, radii, space, themed } from '../theme';
 import { ago, fmt } from './shared';
 
@@ -140,10 +151,33 @@ export function PullScreen({ repo, number }: { repo: string; number: number }) {
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
-            {tab === 'brief' && <Markdown source={pull.body} width={body} />}
+            {tab === 'brief' && (
+              <>
+                <Markdown source={pull.body} width={body} />
+                <View style={styles.bodyReactions}>
+                  <Reactions onChanged={state.reload} reactions={pull.reactions} subjectId={pull.id} />
+                </View>
+                <Details
+                  assignees={pull.assignees}
+                  body={pull.body}
+                  canUpdate={pull.canUpdate}
+                  kind="pull"
+                  labels={pull.labels.map((label) => label.name)}
+                  locked={pull.locked}
+                  milestone={pull.milestone}
+                  nodeId={pull.id}
+                  number={number}
+                  onChanged={state.reload}
+                  repo={repo}
+                  reviewers={pull.reviewers}
+                  title={pull.title}
+                />
+              </>
+            )}
             {tab === 'talk' && (
               <>
-                <Conversation pull={pull} width={body} />
+                <Conversation onChanged={state.reload} pull={pull} width={body} />
+                <MergeBox onChanged={state.reload} pull={pull} />
                 <Composer
                   actions={[
                     { key: 'comment', label: 'comment', primary: true },
@@ -234,6 +268,15 @@ export function PullScreen({ repo, number }: { repo: string; number: number }) {
   );
 }
 
+function AuthorLink({ login, style }: { login: string; style: object }) {
+  const nav = useNav();
+  return (
+    <Pressable accessibilityRole="link" hitSlop={6} onPress={() => nav.open({ kind: 'user', login })}>
+      <Data style={style}>~{login}</Data>
+    </Pressable>
+  );
+}
+
 /** The cover of the pull request, on the widget's card. */
 function Header({ pull }: { pull: PullDetailFull }) {
   return (
@@ -248,7 +291,7 @@ function Header({ pull }: { pull: PullDetailFull }) {
       <View style={styles.statRow}>
         <Data style={styles.stat}>{fmt(pull.changedFiles)} files</Data>
         <Data style={styles.stat}>{fmt(pull.commits)} commits</Data>
-        <Data style={styles.stat}>~{pull.author}</Data>
+        <AuthorLink login={pull.author} style={styles.stat} />
         <Data style={styles.stat}>{ago(pull.createdAt)}</Data>
       </View>
     </View>
@@ -270,7 +313,15 @@ function PullState({ pull }: { pull: PullDetailFull }) {
   return <StateChip text={text} tone={tone} />;
 }
 
-function Conversation({ pull, width }: { pull: PullDetailFull; width: number }) {
+function Conversation({
+  pull,
+  width,
+  onChanged,
+}: {
+  pull: PullDetailFull;
+  width: number;
+  onChanged: () => void;
+}) {
   if (pull.comments.length === 0) {
     return <Label style={styles.note}>nobody has said anything yet</Label>;
   }
@@ -289,7 +340,7 @@ function Conversation({ pull, width }: { pull: PullDetailFull; width: number }) 
               wavelength={12}
             />
           )}
-          <Comment comment={comment} width={width} />
+          <Comment comment={comment} onChanged={onChanged} pull={pull} width={width} />
         </View>
       ))}
     </View>
@@ -302,15 +353,23 @@ const TONE = themed<Record<string, string>>(() => ({
   COMMENTED: colors.ink70,
 }));
 
+const WRITERS = new Set(['ADMIN', 'MAINTAIN', 'WRITE']);
+
 function Comment({
   comment,
+  pull,
   width,
+  onChanged,
   reply = false,
 }: {
   comment: PullComment;
+  pull: PullDetailFull;
   width: number;
+  onChanged: () => void;
   reply?: boolean;
 }) {
+  const nav = useNav();
+  const token = nav.token ?? '';
   const tone =
     comment.kind === 'review'
       ? (TONE[comment.state ?? ''] ?? colors.ink70)
@@ -344,7 +403,13 @@ function Comment({
         style={styles.commentBody}
       >
         <View style={styles.byline}>
-          <Data style={styles.author}>~{comment.author}</Data>
+          <Pressable
+            accessibilityRole="link"
+            hitSlop={6}
+            onPress={() => nav.open({ kind: 'user', login: comment.author })}
+          >
+            <Data style={styles.author}>~{comment.author}</Data>
+          </Pressable>
           <Micro style={[styles.kind, { color: tone }]}>{kindOf(comment)}</Micro>
           <Micro style={styles.when}>{ago(comment.createdAt)}</Micro>
         </View>
@@ -359,8 +424,63 @@ function Comment({
 
         <Markdown source={comment.body} width={width - 34} />
 
+        <CommentTools
+          body={comment.body}
+          canDelete={comment.canDelete}
+          canEdit={comment.canEdit}
+          editKind={comment.editKind}
+          onChanged={onChanged}
+          reactions={comment.reactions}
+          reply={
+            comment.kind === 'thread' && !reply && comment.canReply
+              ? {
+                  label: 'reply in thread',
+                  send: (text) => replyToThread(token, comment.id, text),
+                }
+              : undefined
+          }
+          subjectId={comment.subjectId}
+          verbs={[
+            ...(comment.kind === 'thread' && !reply && (comment.canResolve || comment.canUnresolve)
+              ? [
+                  {
+                    action: {
+                      key: 'resolve',
+                      label: comment.resolved ? 'unresolve' : 'resolve',
+                    },
+                    run: async () => {
+                      await setThreadResolved(token, comment.id, !comment.resolved);
+                      return comment.resolved ? 'opened again' : 'resolved';
+                    },
+                  },
+                ]
+              : []),
+            ...(comment.kind === 'review' &&
+            WRITERS.has(pull.permission ?? '') &&
+            pull.state === 'OPEN' &&
+            (comment.state === 'APPROVED' || comment.state === 'CHANGES_REQUESTED')
+              ? [
+                  {
+                    action: { key: 'dismiss', label: 'dismiss review', confirm: 'dismiss it?' },
+                    run: async () => {
+                      await dismissReview(token, comment.id, 'Dismissed from git-huh.');
+                      return 'dismissed';
+                    },
+                  },
+                ]
+              : []),
+          ]}
+        />
+
         {comment.replies?.map((child) => (
-          <Comment comment={child} key={child.id} reply width={width - 20} />
+          <Comment
+            comment={child}
+            key={child.id}
+            onChanged={onChanged}
+            pull={pull}
+            reply
+            width={width - 20}
+          />
         ))}
       </View>
     </View>
@@ -476,6 +596,9 @@ const styles = themed(() =>
     },
     between: {
       marginVertical: 14,
+    },
+    bodyReactions: {
+      marginTop: 14,
     },
     comment: {
       flexDirection: 'row',

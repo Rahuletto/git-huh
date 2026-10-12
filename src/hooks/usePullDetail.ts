@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 
 import { demoPullDetail } from '../lib/demo';
+import { eventually } from '../lib/eventually';
 import { GitHubError } from '../lib/github';
 import { fetchPullDetail, type PullDetailFull } from '../lib/pullDetail';
 import { DEMO_TOKEN } from '../lib/token';
@@ -30,12 +31,13 @@ export function usePullDetail(
   const remote = useRemote(
     token ? `${token}|${repo}#${number}` : null,
     async (signal) => {
-      const pull = await fetchPullDetail(token ?? '', repo, number, signal);
+      // A pull request opened a second ago can still read as missing.
+      const pull = await eventually(() => fetchPullDetail(token ?? '', repo, number, signal), { signal });
       if (!pull) throw new GitHubError('missing', 'Not found.');
       return pull;
     },
     {
-      cacheKey: login && token !== DEMO_TOKEN ? `${login.toLowerCase()}-pull-${repo}-${number}` : null,
+      cacheKey: login && token !== DEMO_TOKEN ? `${login.toLowerCase()}-pull2-${repo}-${number}` : null,
       demo,
     },
   );

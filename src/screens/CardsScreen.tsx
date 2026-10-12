@@ -82,7 +82,15 @@ export function CardsScreen({
 
   return (
     <Block>
-      <ScreenHead left="repositories" right={`${fmt(model.repoCount)} owned`} />
+      <ScreenHead
+        action={{
+          label: 'search github',
+          hint: 'search repositories, issues, pull requests and people',
+          onPress: () => nav.open({ kind: 'search' }),
+        }}
+        left="repositories"
+        right={`${fmt(model.repoCount)} owned`}
+      />
 
       <SearchField
         draft={draft}

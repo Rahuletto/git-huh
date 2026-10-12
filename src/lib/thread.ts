@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { executeQuery } from './github';
+import { REACTION_FIELDS, reactionGroupsSchema, toReactions, type Reaction } from './reactions';
 
 /**
  * An issue or a discussion, read in full: the opening post, the replies, and
@@ -18,6 +19,15 @@ export interface ThreadComment {
   /** Discussions only: the reply marked as the answer. */
   isAnswer?: boolean;
   replies: ThreadComment[];
+  canEdit: boolean;
+  canDelete: boolean;
+  reactions: Reaction[];
+  /** Discussions only. */
+  upvotes?: number;
+  upvoted?: boolean;
+  canUpvote?: boolean;
+  canMarkAnswer?: boolean;
+  canUnmarkAnswer?: boolean;
 }
 
 export interface Thread {
@@ -38,6 +48,22 @@ export interface Thread {
   comments: ThreadComment[];
   /** Replies GitHub has that were not fetched. */
   moreComments: number;
+  assignees: string[];
+  milestone: { number: number; title: string } | null;
+  locked: boolean;
+  /** SUBSCRIBED · UNSUBSCRIBED · IGNORED. */
+  subscription: string | null;
+  canUpdate: boolean;
+  /** Issues only. */
+  pinned: boolean;
+  /** COMPLETED · NOT_PLANNED · REOPENED, on a closed issue. */
+  stateReason: string | null;
+  reactions: Reaction[];
+  /** Discussions only. */
+  closed: boolean;
+  upvotes: number;
+  upvoted: boolean;
+  canUpvote: boolean;
 }
 
 const COMMENTS = 40;
@@ -49,7 +75,22 @@ const comment = z.object({
   body: z.string(),
   createdAt: z.string(),
   url: z.string(),
+  viewerCanUpdate: z.boolean(),
+  viewerCanDelete: z.boolean(),
+  reactionGroups: reactionGroupsSchema,
+  upvoteCount: z.number().optional(),
+  viewerHasUpvoted: z.boolean().optional(),
+  viewerCanUpvote: z.boolean().optional(),
+  viewerCanMarkAsAnswer: z.boolean().optional(),
+  viewerCanUnmarkAsAnswer: z.boolean().optional(),
 });
+
+const COMMENT_FIELDS = `id author { login } body createdAt url viewerCanUpdate viewerCanDelete ${REACTION_FIELDS}`;
+const DISCUSSION_COMMENT_FIELDS = `${COMMENT_FIELDS}
+  upvoteCount viewerHasUpvoted viewerCanUpvote viewerCanMarkAsAnswer viewerCanUnmarkAsAnswer`;
+
+const people = z.object({ nodes: z.array(z.object({ login: z.string() })) });
+const milestone = z.object({ number: z.number().int(), title: z.string() }).nullable();
 
 const issueSchema = z.object({
   repository: z
@@ -66,6 +107,14 @@ const issueSchema = z.object({
           author: actor,
           labels: z.object({ nodes: z.array(z.object({ name: z.string(), color: z.string() })) }).nullable(),
           comments: z.object({ totalCount: z.number(), nodes: z.array(comment) }),
+          assignees: people,
+          milestone,
+          locked: z.boolean(),
+          viewerSubscription: z.string().nullable(),
+          viewerCanUpdate: z.boolean(),
+          isPinned: z.boolean().nullable(),
+          stateReason: z.string().nullable(),
+          reactionGroups: reactionGroupsSchema,
         })
         .nullable(),
     })
@@ -87,6 +136,14 @@ const discussionSchema = z.object({
           isAnswered: z.boolean().nullable(),
           answer: z.object({ id: z.string() }).nullable(),
           category: z.object({ name: z.string() }),
+          closed: z.boolean(),
+          locked: z.boolean(),
+          viewerSubscription: z.string().nullable(),
+          viewerCanUpdate: z.boolean(),
+          upvoteCount: z.number(),
+          viewerHasUpvoted: z.boolean(),
+          viewerCanUpvote: z.boolean(),
+          reactionGroups: reactionGroupsSchema,
           comments: z.object({
             totalCount: z.number(),
             nodes: z.array(comment.extend({ replies: z.object({ nodes: z.array(comment) }) })),
@@ -105,6 +162,14 @@ function toComment(node: z.infer<typeof comment>): ThreadComment {
     createdAt: node.createdAt,
     url: node.url,
     replies: [],
+    canEdit: node.viewerCanUpdate,
+    canDelete: node.viewerCanDelete,
+    reactions: toReactions(node.reactionGroups),
+    upvotes: node.upvoteCount,
+    upvoted: node.viewerHasUpvoted,
+    canUpvote: node.viewerCanUpvote,
+    canMarkAnswer: node.viewerCanMarkAsAnswer,
+    canUnmarkAnswer: node.viewerCanUnmarkAsAnswer,
   };
 }
 
@@ -128,10 +193,14 @@ export async function fetchThread(
             issue(number: ${number}) {
               id number title url body state createdAt
               author { login }
-              labels(first: 8) { nodes { name color } }
+              labels(first: 20) { nodes { name color } }
+              assignees(first: 10) { nodes { login } }
+              milestone { number title }
+              locked viewerSubscription viewerCanUpdate isPinned stateReason
+              ${REACTION_FIELDS}
               comments(last: ${COMMENTS}) {
                 totalCount
-                nodes { id author { login } body createdAt url }
+                nodes { ${COMMENT_FIELDS} }
               }
             }
           }
@@ -157,6 +226,18 @@ export async function fetchThread(
       category: null,
       comments: issue.comments.nodes.map(toComment),
       moreComments: Math.max(0, issue.comments.totalCount - issue.comments.nodes.length),
+      assignees: issue.assignees.nodes.map((node) => node.login),
+      milestone: issue.milestone,
+      locked: issue.locked,
+      subscription: issue.viewerSubscription,
+      canUpdate: issue.viewerCanUpdate,
+      pinned: issue.isPinned ?? false,
+      stateReason: issue.stateReason,
+      reactions: toReactions(issue.reactionGroups),
+      closed: issue.state === 'CLOSED',
+      upvotes: 0,
+      upvoted: false,
+      canUpvote: false,
     };
   }
 
@@ -170,11 +251,13 @@ export async function fetchThread(
             author { login }
             answer { id }
             category { name }
+            closed locked viewerSubscription viewerCanUpdate upvoteCount viewerHasUpvoted viewerCanUpvote
+            ${REACTION_FIELDS}
             comments(first: ${COMMENTS}) {
               totalCount
               nodes {
-                id author { login } body createdAt url
-                replies(first: 10) { nodes { id author { login } body createdAt url } }
+                ${DISCUSSION_COMMENT_FIELDS}
+                replies(first: 10) { nodes { ${DISCUSSION_COMMENT_FIELDS} } }
               }
             }
           }
@@ -194,7 +277,7 @@ export async function fetchThread(
     title: discussion.title,
     url: discussion.url,
     body: discussion.body,
-    state: discussion.isAnswered ? 'ANSWERED' : 'OPEN',
+    state: discussion.closed ? 'CLOSED' : discussion.isAnswered ? 'ANSWERED' : 'OPEN',
     author: discussion.author?.login ?? 'ghost',
     createdAt: discussion.createdAt,
     labels: [],
@@ -205,5 +288,17 @@ export async function fetchThread(
       replies: node.replies.nodes.map(toComment),
     })),
     moreComments: Math.max(0, discussion.comments.totalCount - discussion.comments.nodes.length),
+    assignees: [],
+    milestone: null,
+    locked: discussion.locked,
+    subscription: discussion.viewerSubscription,
+    canUpdate: discussion.viewerCanUpdate,
+    pinned: false,
+    stateReason: null,
+    reactions: toReactions(discussion.reactionGroups),
+    closed: discussion.closed,
+    upvotes: discussion.upvoteCount,
+    upvoted: discussion.viewerHasUpvoted,
+    canUpvote: discussion.viewerCanUpvote,
   };
 }

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { toneOf } from './checks';
+import { parseInputs, toneOf } from './checks';
 import { prAge } from './prs';
 
 test('a check run reads as one of five tones', () => {
@@ -20,4 +20,11 @@ test('a pull request’s age is short', () => {
   assert.equal(prAge('2026-09-17T12:00:00Z', now), '10d');
   assert.equal(prAge('2026-05-27T12:00:00Z', now), '4mo');
   assert.equal(prAge('2024-09-27T12:00:00Z', now), '2y');
+});
+
+test('dispatch inputs are key=value lines, blanks and junk ignored', () => {
+  assert.deepEqual(parseInputs('env = prod\n\nnot a pair\nnote=a=b\n=x'), {
+    env: 'prod',
+    note: 'a=b',
+  });
 });

@@ -10,15 +10,26 @@ import { tokenStore } from '../../src/lib/token';
 import { AccountScreen } from '../../src/screens/AccountScreen';
 import { AssignedPage } from '../../src/screens/AssignedScreen';
 import { BriefPage } from '../../src/screens/BriefScreen';
+import {
+  NewDiscussionScreen,
+  NewFileScreen,
+  NewGistScreen,
+  NewPullScreen,
+  NewReleaseScreen,
+  NewRepoScreen,
+} from '../../src/screens/CreateScreen';
 import { FileScreen } from '../../src/screens/FileScreen';
+import { GistScreen, GistsScreen } from '../../src/screens/GistsScreen';
 import { LoadingScreen } from '../../src/screens/LoadingScreen';
 import { NewIssueScreen } from '../../src/screens/NewIssueScreen';
 import { PeoplePage } from '../../src/screens/PeopleScreen';
 import { PullScreen } from '../../src/screens/PullScreen';
 import { QueuePage } from '../../src/screens/QueueScreen';
 import { RepoScreen } from '../../src/screens/RepoScreen';
+import { SearchScreen } from '../../src/screens/SearchScreen';
 import { ShareScreen } from '../../src/screens/ShareScreen';
 import { ThreadScreen } from '../../src/screens/ThreadScreen';
+import { UserScreen } from '../../src/screens/UserScreen';
 import { SECTIONS } from '../../src/shell/sections';
 import { useSession } from '../../src/shell/session';
 import { colors, fonts, space, themed } from '../../src/theme';
@@ -34,11 +45,31 @@ const RouteView = memo(function RouteView({ route }: { route: Route }) {
     case 'thread':
       return <ThreadScreen number={route.number} repo={route.repo} type={route.type} />;
     case 'repo':
-      return <RepoScreen repo={route.repo} />;
+      return <RepoScreen initialTab={route.tab} repo={route.repo} />;
     case 'file':
       return <FileScreen find={route.find} path={route.path} refName={route.ref} repo={route.repo} />;
     case 'new-issue':
       return <NewIssueScreen repo={route.repo} />;
+    case 'new-pull':
+      return <NewPullScreen head={route.head} repo={route.repo} />;
+    case 'new-release':
+      return <NewReleaseScreen repo={route.repo} />;
+    case 'new-discussion':
+      return <NewDiscussionScreen repo={route.repo} />;
+    case 'new-file':
+      return <NewFileScreen dir={route.dir} refName={route.ref} repo={route.repo} />;
+    case 'new-repo':
+      return <NewRepoScreen />;
+    case 'new-gist':
+      return <NewGistScreen />;
+    case 'user':
+      return <UserScreen login={route.login} />;
+    case 'search':
+      return <SearchScreen query={route.query} />;
+    case 'gists':
+      return <GistsScreen login={route.login} />;
+    case 'gist':
+      return <GistScreen id={route.id} />;
     case 'account':
       return <AccountScreen />;
     case 'share':
@@ -65,7 +96,23 @@ function routeKey(route: Route): string {
       return `file:${route.repo}:${route.path}`;
     case 'repo':
     case 'new-issue':
+    case 'new-pull':
+    case 'new-release':
+    case 'new-discussion':
       return `${route.kind}:${route.repo}`;
+    case 'new-file':
+      return `new-file:${route.repo}:${route.dir}`;
+    case 'user':
+      return `user:${route.login}`;
+    case 'search':
+      return `search:${route.query ?? ''}`;
+    case 'gists':
+      return `gists:${route.login ?? ''}`;
+    case 'gist':
+      return `gist:${route.id}`;
+    case 'new-repo':
+    case 'new-gist':
+      return route.kind;
     case 'add-account':
     case 'account':
     case 'queue':

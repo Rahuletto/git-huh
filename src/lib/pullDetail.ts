@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { executeQuery } from './github';
+import { REACTION_FIELDS, reactionGroupsSchema, toReactions, type Reaction } from './reactions';
 import { rest } from './rest';
 
 /**
@@ -45,6 +46,20 @@ export interface PullComment {
   resolved?: boolean;
   /** Replies inside a review thread, oldest first. */
   replies?: PullComment[];
+  /**
+   * The comment's own node — what a reaction, an edit or a delete is aimed
+   * at. For a thread, its first comment; `id` is the thread.
+   */
+  subjectId: string;
+  /** Which mutation edits it: top-level talk is an issue comment, a thread is a review comment. */
+  editKind: 'issue' | 'review' | null;
+  canEdit: boolean;
+  canDelete: boolean;
+  reactions: Reaction[];
+  /** Threads only. */
+  canResolve?: boolean;
+  canUnresolve?: boolean;
+  canReply?: boolean;
 }
 
 export type DiffKind = 'add' | 'del' | 'context' | 'meta';
@@ -93,6 +108,29 @@ export interface PullDetailFull {
   commits: number;
   reviewDecision: string | null;
   labels: { name: string; color: string }[];
+  assignees: string[];
+  /** People asked for a review who have not given one yet. */
+  reviewers: string[];
+  milestone: { number: number; title: string } | null;
+  /** MERGEABLE · CONFLICTING · UNKNOWN (GitHub is still working it out). */
+  mergeable: string;
+  /** CLEAN · BEHIND · BLOCKED · DIRTY · UNSTABLE · DRAFT · HAS_HOOKS · UNKNOWN. */
+  mergeState: string;
+  /** The ways this repository allows a merge, in GitHub's order. */
+  mergeMethods: ('MERGE' | 'SQUASH' | 'REBASE')[];
+  autoMergeAllowed: boolean;
+  autoMergeOn: boolean;
+  /** Title, body, labels, state: what `viewerCanUpdate` guards. */
+  canUpdate: boolean;
+  canUpdateBranch: boolean;
+  /** ADMIN · MAINTAIN · WRITE · TRIAGE · READ. */
+  permission: string | null;
+  subscription: string | null;
+  locked: boolean;
+  /** Where the head branch lives, and whether it still does. */
+  headRepo: string | null;
+  headRefExists: boolean;
+  reactions: Reaction[];
   comments: PullComment[];
   files: DiffFile[];
   /** True when the file list was capped at `FILE_LIMIT`. */
@@ -107,6 +145,9 @@ const commentNode = z.object({
   body: z.string(),
   createdAt: z.string(),
   url: z.string(),
+  viewerCanUpdate: z.boolean().optional(),
+  viewerCanDelete: z.boolean().optional(),
+  reactionGroups: reactionGroupsSchema,
 });
 
 const threadCommentNode = commentNode.extend({
@@ -140,6 +181,36 @@ const pullSchema = z.object({
           labels: z
             .object({ nodes: z.array(z.object({ name: z.string(), color: z.string() })) })
             .nullable(),
+          assignees: z.object({ nodes: z.array(z.object({ login: z.string() })) }),
+          reviewRequests: z
+            .object({
+              nodes: z.array(
+                z.object({
+                  requestedReviewer: z
+                    .object({ login: z.string().optional(), slug: z.string().optional() })
+                    .nullable(),
+                }),
+              ),
+            })
+            .nullable(),
+          milestone: z.object({ number: z.number().int(), title: z.string() }).nullable(),
+          mergeable: z.string(),
+          mergeStateStatus: z.string(),
+          viewerCanUpdate: z.boolean(),
+          viewerCanUpdateBranch: z.boolean(),
+          viewerSubscription: z.string().nullable(),
+          locked: z.boolean(),
+          autoMergeRequest: z.object({ enabledAt: z.string().nullable() }).nullable(),
+          headRepository: z.object({ nameWithOwner: z.string() }).nullable(),
+          headRef: z.object({ id: z.string() }).nullable(),
+          reactionGroups: reactionGroupsSchema,
+          repository: z.object({
+            mergeCommitAllowed: z.boolean(),
+            squashMergeAllowed: z.boolean(),
+            rebaseMergeAllowed: z.boolean(),
+            autoMergeAllowed: z.boolean(),
+            viewerPermission: z.string().nullable(),
+          }),
           commits: z.object({ totalCount: z.number().int().nonnegative() }),
           comments: z.object({ nodes: z.array(commentNode) }),
           reviews: z.object({
@@ -152,6 +223,9 @@ const pullSchema = z.object({
               z.object({
                 id: z.string(),
                 isResolved: z.boolean(),
+                viewerCanResolve: z.boolean(),
+                viewerCanUnresolve: z.boolean(),
+                viewerCanReply: z.boolean(),
                 path: z.string().nullable(),
                 comments: z.object({ nodes: z.array(threadCommentNode) }),
               }),
@@ -196,21 +270,48 @@ function query(owner: string, name: string, number: number): string {
           changedFiles
           reviewDecision
           author { login }
-          labels(first: 8) { nodes { name color } }
+          labels(first: 20) { nodes { name color } }
+          assignees(first: 10) { nodes { login } }
+          reviewRequests(first: 10) {
+            nodes { requestedReviewer { ... on User { login } ... on Team { slug } } }
+          }
+          milestone { number title }
+          mergeable
+          mergeStateStatus
+          viewerCanUpdate
+          viewerCanUpdateBranch
+          viewerSubscription
+          locked
+          autoMergeRequest { enabledAt }
+          headRepository { nameWithOwner }
+          headRef { id }
+          ${REACTION_FIELDS}
+          repository {
+            mergeCommitAllowed squashMergeAllowed rebaseMergeAllowed autoMergeAllowed viewerPermission
+          }
           commits { totalCount }
           comments(last: ${COMMENT_LIMIT}) {
-            nodes { id author { login } body createdAt url }
+            nodes {
+              id author { login } body createdAt url viewerCanUpdate viewerCanDelete
+              ${REACTION_FIELDS}
+            }
           }
           reviews(last: ${COMMENT_LIMIT}) {
-            nodes { id author { login } body createdAt url state submittedAt }
+            nodes { id author { login } body createdAt url state submittedAt ${REACTION_FIELDS} }
           }
           reviewThreads(last: ${THREAD_LIMIT}) {
             nodes {
               id
               isResolved
+              viewerCanResolve
+              viewerCanUnresolve
+              viewerCanReply
               path
               comments(first: 6) {
-                nodes { id author { login } body createdAt url path diffHunk }
+                nodes {
+                  id author { login } body createdAt url path diffHunk viewerCanUpdate viewerCanDelete
+                  ${REACTION_FIELDS}
+                }
               }
             }
           }
@@ -339,6 +440,11 @@ export async function fetchPullDetail(
       body: node.body,
       createdAt: node.createdAt,
       url: node.url,
+      subjectId: node.id,
+      editKind: 'issue' as const,
+      canEdit: node.viewerCanUpdate ?? false,
+      canDelete: node.viewerCanDelete ?? false,
+      reactions: toReactions(node.reactionGroups),
     })),
     // A review with an empty body is just a state change; the chip for it is
     // already on the header, so an empty card would say nothing twice.
@@ -352,6 +458,11 @@ export async function fetchPullDetail(
         createdAt: node.submittedAt ?? node.createdAt,
         url: node.url,
         state: node.state,
+        subjectId: node.id,
+        editKind: null,
+        canEdit: false,
+        canDelete: false,
+        reactions: toReactions(node.reactionGroups),
       })),
     ...pr.reviewThreads.nodes.flatMap((thread) => {
       const [head, ...rest] = thread.comments.nodes;
@@ -367,6 +478,14 @@ export async function fetchPullDetail(
           path: thread.path ?? head.path ?? undefined,
           diffHunk: head.diffHunk ?? undefined,
           resolved: thread.isResolved,
+          subjectId: head.id,
+          editKind: 'review' as const,
+          canEdit: head.viewerCanUpdate ?? false,
+          canDelete: head.viewerCanDelete ?? false,
+          reactions: toReactions(head.reactionGroups),
+          canResolve: thread.viewerCanResolve,
+          canUnresolve: thread.viewerCanUnresolve,
+          canReply: thread.viewerCanReply,
           replies: rest.map((reply) => ({
             id: reply.id,
             kind: 'thread' as const,
@@ -374,6 +493,11 @@ export async function fetchPullDetail(
             body: reply.body,
             createdAt: reply.createdAt,
             url: reply.url,
+            subjectId: reply.id,
+            editKind: 'review' as const,
+            canEdit: reply.viewerCanUpdate ?? false,
+            canDelete: reply.viewerCanDelete ?? false,
+            reactions: toReactions(reply.reactionGroups),
           })),
         },
       ];
@@ -403,6 +527,29 @@ export async function fetchPullDetail(
     commits: pr.commits.totalCount,
     reviewDecision: pr.reviewDecision,
     labels: pr.labels?.nodes ?? [],
+    assignees: pr.assignees.nodes.map((node) => node.login),
+    reviewers: (pr.reviewRequests?.nodes ?? []).flatMap((node) => {
+      const who = node.requestedReviewer?.login ?? node.requestedReviewer?.slug;
+      return who ? [who] : [];
+    }),
+    milestone: pr.milestone,
+    mergeable: pr.mergeable,
+    mergeState: pr.mergeStateStatus,
+    mergeMethods: [
+      ...(pr.repository.mergeCommitAllowed ? (['MERGE'] as const) : []),
+      ...(pr.repository.squashMergeAllowed ? (['SQUASH'] as const) : []),
+      ...(pr.repository.rebaseMergeAllowed ? (['REBASE'] as const) : []),
+    ],
+    autoMergeAllowed: pr.repository.autoMergeAllowed,
+    autoMergeOn: pr.autoMergeRequest != null,
+    canUpdate: pr.viewerCanUpdate,
+    canUpdateBranch: pr.viewerCanUpdateBranch,
+    permission: pr.repository.viewerPermission,
+    subscription: pr.viewerSubscription,
+    locked: pr.locked,
+    headRepo: pr.headRepository?.nameWithOwner ?? null,
+    headRefExists: pr.headRef != null,
+    reactions: toReactions(pr.reactionGroups),
     comments,
     files,
     moreFiles: Math.max(0, pr.changedFiles - files.length),

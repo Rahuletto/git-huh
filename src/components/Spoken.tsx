@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
+import { useNav } from '../lib/nav';
 import { ago } from '../screens/shared';
 import { colors, fonts, themed } from '../theme';
 import { Markdown } from './Markdown';
@@ -35,6 +36,7 @@ export function Spoken({
   children?: ReactNode;
 }) {
   const [height, setHeight] = useState(48);
+  const nav = useNav();
 
   return (
     <View style={[styles.row, reply && styles.reply]}>
@@ -55,7 +57,13 @@ export function Spoken({
         style={styles.body}
       >
         <View style={styles.byline}>
-          <Data style={styles.author}>~{author}</Data>
+          <Pressable
+            accessibilityRole="link"
+            hitSlop={6}
+            onPress={() => nav.open({ kind: 'user', login: author })}
+          >
+            <Data style={styles.author}>~{author}</Data>
+          </Pressable>
           <Micro style={[styles.kind, { color: tone }]}>{kind}</Micro>
           <Micro style={styles.when}>{ago(at)}</Micro>
         </View>

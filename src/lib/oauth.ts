@@ -14,7 +14,7 @@
  */
 
 /** The same scopes the token form asks for (`TOKEN_SETTINGS_URL`). */
-export const OAUTH_SCOPES = 'read:user repo read:discussion write:discussion security_events';
+export const OAUTH_SCOPES = 'read:user repo read:discussion write:discussion security_events user:follow gist';
 
 const DEVICE_CODE_URL = 'https://github.com/login/device/code';
 const TOKEN_URL = 'https://github.com/login/oauth/access_token';

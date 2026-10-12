@@ -9,6 +9,7 @@ import {
   View,
 } from 'react-native';
 
+import { Composer } from '../components/Composer';
 import { Markdown } from '../components/Markdown';
 import { OverlayFrame, SavedNote } from '../components/Overlay';
 import { Squiggle } from '../components/Squiggle';
@@ -24,7 +25,7 @@ import {
   demoSearch,
 } from '../lib/demo';
 import { GitHubError } from '../lib/github';
-import { useNav } from '../lib/nav';
+import { useNav, type RepoTab } from '../lib/nav';
 import {
   fetchRepoInfo,
   listAlerts,
@@ -36,14 +37,23 @@ import {
   type CodeHit,
   type RepoInfo,
 } from '../lib/repo';
+import {
+  deleteRelease,
+  forkRepo,
+  setAlertDismissed,
+  setStarred,
+  setWatch,
+  type DismissReason,
+} from '../lib/writes';
 import { colors, fonts, radii, space, themed } from '../theme';
-import { ago, fmt } from './shared';
+import { Actions, Branches, Pulls, WRITERS } from './RepoTabs';
+import { ago, Chips, fmt } from './shared';
 
-type Tab = 'code' | 'issues' | 'releases' | 'discussions' | 'security';
+type Tab = RepoTab;
 
 /** Where to mint a token that can also read Dependabot alerts. */
 const SECURITY_TOKEN_URL =
-  'https://github.com/settings/tokens/new?scopes=read:user,repo,read:discussion,write:discussion,security_events&description=git-huh';
+  'https://github.com/settings/tokens/new?scopes=read:user,repo,read:discussion,write:discussion,security_events,user:follow,gist&description=git-huh';
 
 /**
  * A repository, from the inside.
@@ -52,9 +62,9 @@ const SECURITY_TOKEN_URL =
  * releases, the open issues, the discussions and the security alerts, each
  * of them a named gap in GitHub's own phone app.
  */
-export function RepoScreen({ repo }: { repo: string }) {
+export function RepoScreen({ repo, initialTab }: { repo: string; initialTab?: RepoTab }) {
   const nav = useNav();
-  const [tab, setTab] = useState<Tab>('code');
+  const [tab, setTab] = useState<Tab>(initialTab ?? 'code');
   const owner = nav.login?.toLowerCase() ?? '';
 
   const infoDemo = useMemo(() => (nav.demo ? demoRepoInfo(repo) : undefined), [nav.demo, repo]);
@@ -65,7 +75,7 @@ export function RepoScreen({ repo }: { repo: string }) {
       if (!found) throw new GitHubError('missing', 'Not found.');
       return found;
     },
-    { cacheKey: owner ? `${owner}-repo-${repo}` : null, demo: infoDemo },
+    { cacheKey: owner ? `${owner}-repo2-${repo}` : null, demo: infoDemo },
   );
   const repoInfo = info.status === 'ready' ? info.data : null;
 
@@ -110,8 +120,28 @@ export function RepoScreen({ repo }: { repo: string }) {
               </View>
             )}
             {repoInfo.isPrivate && <Data style={styles.stat}>private</Data>}
+            {repoInfo.archived && <Data style={styles.stat}>archived</Data>}
           </View>
         )}
+        <View style={styles.owner}>
+          <Pressable
+            accessibilityRole="link"
+            hitSlop={6}
+            onPress={() => nav.open({ kind: 'user', login: repo.split('/')[0] })}
+          >
+            <Label style={styles.link}>~{repo.split('/')[0]}</Label>
+          </Pressable>
+          {repoInfo?.parent && (
+            <Pressable
+              accessibilityRole="link"
+              hitSlop={6}
+              onPress={() => nav.open({ kind: 'repo', repo: repoInfo.parent ?? '' })}
+            >
+              <Label style={styles.link}>forked from {repoInfo.parent}</Label>
+            </Pressable>
+          )}
+        </View>
+        {repoInfo && <RepoVerbs info={repoInfo} onChanged={info.reload} repo={repo} />}
         {info.status === 'error' && (
           <Label style={styles.error}>
             {info.error instanceof GitHubError && info.error.kind === 'missing'
@@ -124,7 +154,9 @@ export function RepoScreen({ repo }: { repo: string }) {
           {(
             [
               ['code', 'code'],
+              ['pulls', repoInfo ? `pulls ${fmt(repoInfo.openPulls)}` : 'pulls'],
               ['issues', repoInfo ? `issues ${fmt(repoInfo.openIssues)}` : 'issues'],
+              ['actions', 'actions'],
               ['releases', 'releases'],
               ['discussions', 'discussions'],
               ['security', 'security'],
@@ -143,12 +175,56 @@ export function RepoScreen({ repo }: { repo: string }) {
         </View>
 
         {tab === 'code' && <Code info={repoInfo} repo={repo} />}
+        {tab === 'pulls' && <Pulls info={repoInfo} repo={repo} />}
         {tab === 'issues' && <Issues repo={repo} />}
-        {tab === 'releases' && <Releases repo={repo} />}
+        {tab === 'actions' && <Actions info={repoInfo} repo={repo} />}
+        {tab === 'releases' && <Releases info={repoInfo} repo={repo} />}
         {tab === 'discussions' && <Discussions info={repoInfo} repo={repo} />}
-        {tab === 'security' && <Security repo={repo} />}
+        {tab === 'security' && <Security info={repoInfo} repo={repo} />}
       </ScrollView>
     </OverlayFrame>
+  );
+}
+
+/** Star, watch, fork: what you do to a repository as a whole. */
+function RepoVerbs({ repo, info, onChanged }: { repo: string; info: RepoInfo; onChanged: () => void }) {
+  const nav = useNav();
+  const token = nav.token ?? '';
+  const watching = info.subscription === 'SUBSCRIBED';
+  const ignoring = info.subscription === 'IGNORED';
+  const own = repo.split('/')[0].toLowerCase() === nav.login?.toLowerCase();
+  return (
+    <Composer
+      actions={[
+        { key: 'star', label: info.starred ? `★ starred ${fmt(info.stars)}` : `☆ star ${fmt(info.stars)}`, on: info.starred },
+        { key: 'watch', label: watching ? 'watching' : 'watch', on: watching },
+        { key: 'ignore', label: ignoring ? 'ignoring' : 'ignore', on: ignoring },
+        ...(!own ? [{ key: 'fork', label: `fork ${fmt(info.forks)}`, confirm: 'fork it to your account?' }] : []),
+      ]}
+      bare
+      demo={nav.demo}
+      doing="that"
+      onSubmit={async (key) => {
+        if (key === 'star') {
+          await setStarred(token, info.id, !info.starred);
+          onChanged();
+          return info.starred ? 'unstarred' : 'starred';
+        }
+        if (key === 'watch') {
+          await setWatch(token, repo, watching ? 'participating' : 'watching');
+          onChanged();
+          return watching ? 'only what involves you, from now on' : 'watching everything';
+        }
+        if (key === 'ignore') {
+          await setWatch(token, repo, ignoring ? 'participating' : 'ignoring');
+          onChanged();
+          return ignoring ? 'no longer ignored' : 'ignored · no notifications from here';
+        }
+        const fork = await forkRepo(token, repo);
+        nav.open({ kind: 'repo', repo: fork });
+        return `forked to ${fork}`;
+      }}
+    />
   );
 }
 
@@ -159,14 +235,16 @@ function Code({ repo, info }: { repo: string; info: RepoInfo | null }) {
   const [path, setPath] = useState('');
   const [draft, setDraft] = useState('');
   const [terms, setTerms] = useState('');
-  const ref = info?.defaultBranch ?? '';
+  const [branch, setBranch] = useState<string | null>(null);
+  const ref = branch ?? info?.defaultBranch ?? '';
+  const canWrite = WRITERS.has(info?.permission ?? '');
   const owner = nav.login?.toLowerCase() ?? '';
 
   const listDemo = useMemo(() => (nav.demo ? demoEntries(path) : undefined), [nav.demo, path]);
   const listing = useRemote(
     nav.token && !terms ? `${nav.token}|ls|${repo}|${ref}|${path}` : null,
     (signal) => listDirectory(nav.token ?? '', repo, path, ref, signal),
-    { cacheKey: owner ? `${owner}-ls-${repo}-${path || 'root'}` : null, demo: listDemo },
+    { cacheKey: owner ? `${owner}-ls-${repo}-${branch ?? ''}-${path || 'root'}` : null, demo: listDemo },
   );
 
   const searchDemo = useMemo(
@@ -199,6 +277,7 @@ function Code({ repo, info }: { repo: string; info: RepoInfo | null }) {
         <SearchResults state={search} terms={terms} />
       ) : (
         <>
+          <Branches branch={ref} info={info} onBranch={setBranch} repo={repo} />
           <View style={styles.crumbs}>
             <Pressable accessibilityRole="button" onPress={() => setPath('')}>
               <Data style={crumbs.length === 0 ? styles.crumbOn : styles.crumb}>{repo.split('/')[1]}</Data>
@@ -216,6 +295,16 @@ function Code({ repo, info }: { repo: string; info: RepoInfo | null }) {
             ))}
           </View>
 
+          {canWrite && (
+            <Pressable
+              accessibilityRole="button"
+              hitSlop={6}
+              onPress={() => nav.open({ kind: 'new-file', repo, dir: path, ref })}
+              style={styles.newFile}
+            >
+              <Label style={styles.link}>new file here</Label>
+            </Pressable>
+          )}
           {listing.status === 'loading' && <Label style={styles.note}>opening the folder…</Label>}
           {listing.status === 'error' && <Label style={styles.error}>could not list this folder</Label>}
           {listing.status === 'ready' &&
@@ -346,26 +435,47 @@ function size(bytes: number): string {
 
 function Issues({ repo }: { repo: string }) {
   const nav = useNav();
-  const demo = useMemo(() => (nav.demo ? demoIssues() : undefined), [nav.demo]);
+  const [state, setState] = useState<'open' | 'closed'>('open');
+  const demo = useMemo(
+    () => (nav.demo ? (state === 'open' ? demoIssues() : []) : undefined),
+    [nav.demo, state],
+  );
   const issues = useRemote(
-    nav.token ? `${nav.token}|issues|${repo}` : null,
-    (signal) => listIssues(nav.token ?? '', repo, signal),
-    { cacheKey: nav.login ? `${nav.login.toLowerCase()}-issues-${repo}` : null, demo },
+    nav.token ? `${nav.token}|issues|${repo}|${state}` : null,
+    (signal) => listIssues(nav.token ?? '', repo, signal, state),
+    {
+      cacheKey: nav.login
+        ? `${nav.login.toLowerCase()}-issues-${repo}${state === 'closed' ? '-closed' : ''}`
+        : null,
+      demo,
+    },
   );
 
   return (
     <View>
-      <Pressable
-        accessibilityRole="button"
-        onPress={() => nav.open({ kind: 'new-issue', repo })}
-        style={[styles.solid, styles.newIssue]}
-      >
-        <Label style={styles.solidLabel}>new issue</Label>
-      </Pressable>
+      <View style={styles.headRow}>
+        <Chips
+          current={state}
+          items={[
+            { key: 'open', label: 'open' },
+            { key: 'closed', label: 'closed' },
+          ]}
+          onSelect={setState}
+        />
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => nav.open({ kind: 'new-issue', repo })}
+          style={styles.solid}
+        >
+          <Label style={styles.solidLabel}>new issue</Label>
+        </Pressable>
+      </View>
       {issues.status === 'loading' && <Label style={styles.note}>reading the issues…</Label>}
       {issues.status === 'error' && <Label style={styles.error}>could not read the issues</Label>}
       {issues.status === 'ready' && issues.data.length === 0 && (
-        <Label style={styles.note}>no open issues · nothing is on fire</Label>
+        <Label style={styles.note}>
+          {state === 'open' ? 'no open issues · nothing is on fire' : 'nothing closed yet'}
+        </Label>
       )}
       {issues.status === 'ready' &&
         issues.data.map((issue) => (
@@ -393,8 +503,9 @@ function Issues({ repo }: { repo: string }) {
 
 // --- releases ----------------------------------------------------------------
 
-function Releases({ repo }: { repo: string }) {
+function Releases({ repo, info }: { repo: string; info: RepoInfo | null }) {
   const nav = useNav();
+  const canWrite = WRITERS.has(info?.permission ?? '');
   const { width } = useWindowDimensions();
   const [openId, setOpenId] = useState<number | null>(null);
   const demo = useMemo(() => (nav.demo ? demoReleases() : undefined), [nav.demo]);
@@ -404,13 +515,30 @@ function Releases({ repo }: { repo: string }) {
     { cacheKey: nav.login ? `${nav.login.toLowerCase()}-releases-${repo}` : null, demo },
   );
 
+  const create = canWrite ? (
+    <Pressable
+      accessibilityRole="button"
+      onPress={() => nav.open({ kind: 'new-release', repo })}
+      style={[styles.solid, styles.newIssue]}
+    >
+      <Label style={styles.solidLabel}>new release</Label>
+    </Pressable>
+  ) : null;
   if (releases.status === 'loading') return <Label style={styles.note}>reading the releases…</Label>;
   if (releases.status === 'error') return <Label style={styles.error}>could not read the releases</Label>;
   if (releases.status !== 'ready') return null;
-  if (releases.data.length === 0) return <Label style={styles.note}>nothing released yet</Label>;
+  if (releases.data.length === 0) {
+    return (
+      <View>
+        {create}
+        <Label style={styles.note}>nothing released yet</Label>
+      </View>
+    );
+  }
 
   return (
     <View>
+      {create}
       {releases.data.map((release, index) => {
         const open = openId === release.id || (openId == null && index === 0);
         return (
@@ -437,6 +565,32 @@ function Releases({ repo }: { repo: string }) {
             {open && (
               <View style={styles.releaseBody}>
                 <Markdown source={release.body} width={width - space.gutter * 2} />
+                <View style={styles.releaseLinks}>
+                  {release.url && (
+                    <Pressable
+                      accessibilityRole="link"
+                      hitSlop={6}
+                      onPress={() => Linking.openURL(release.url).catch(() => {})}
+                    >
+                      <Label style={styles.link}>
+                        {release.assets > 0 ? 'assets on github' : 'open on github'}
+                      </Label>
+                    </Pressable>
+                  )}
+                </View>
+                {canWrite && (
+                  <Composer
+                    actions={[{ key: 'delete', label: 'delete release', confirm: 'delete it? the tag stays' }]}
+                    bare
+                    demo={nav.demo}
+                    doing="that"
+                    onSubmit={async () => {
+                      await deleteRelease(nav.token ?? '', repo, release.id);
+                      releases.reload();
+                      return 'deleted';
+                    }}
+                  />
+                )}
               </View>
             )}
             {index < releases.data.length - 1 && (
@@ -462,6 +616,15 @@ function Discussions({ repo, info }: { repo: string; info: RepoInfo | null }) {
   );
 
   if (!enabled) return <Label style={styles.note}>discussions are off for this repository</Label>;
+  const create = (
+    <Pressable
+      accessibilityRole="button"
+      onPress={() => nav.open({ kind: 'new-discussion', repo })}
+      style={[styles.solid, styles.newIssue]}
+    >
+      <Label style={styles.solidLabel}>new discussion</Label>
+    </Pressable>
+  );
   if (discussions.status === 'loading') return <Label style={styles.note}>reading the discussions…</Label>;
   if (discussions.status === 'error') {
     return (
@@ -473,10 +636,18 @@ function Discussions({ repo, info }: { repo: string; info: RepoInfo | null }) {
     );
   }
   if (discussions.status !== 'ready') return null;
-  if (discussions.data.length === 0) return <Label style={styles.note}>nobody has started one yet</Label>;
+  if (discussions.data.length === 0) {
+    return (
+      <View>
+        {create}
+        <Label style={styles.note}>nobody has started one yet</Label>
+      </View>
+    );
+  }
 
   return (
     <View>
+      {create}
       {discussions.data.map((discussion) => (
         <Pressable
           accessibilityRole="button"
@@ -510,8 +681,18 @@ const SEVERITY = themed<Record<string, string>>(() => ({
   low: colors.ink40,
 }));
 
-function Security({ repo }: { repo: string }) {
+const REASONS: readonly (readonly [DismissReason, string])[] = [
+  ['fix_started', 'a fix has started'],
+  ['no_bandwidth', 'no time for it'],
+  ['tolerable_risk', 'the risk is tolerable'],
+  ['inaccurate', 'it is inaccurate'],
+  ['not_used', 'the code is not used'],
+];
+
+function Security({ repo, info }: { repo: string; info: RepoInfo | null }) {
   const nav = useNav();
+  const [dismissing, setDismissing] = useState<number | null>(null);
+  const canWrite = WRITERS.has(info?.permission ?? '');
   const demo = useMemo(() => (nav.demo ? demoAlerts() : undefined), [nav.demo]);
   const alerts = useRemote(
     nav.token ? `${nav.token}|alerts|${repo}` : null,
@@ -562,6 +743,30 @@ function Security({ repo }: { repo: string }) {
               {alert.vulnerable}
               {alert.patched ? ` → fixed in ${alert.patched}` : ' · no fix yet'} · {alert.manifest}
             </Micro>
+            {canWrite && (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityState={{ expanded: dismissing === alert.number }}
+                hitSlop={6}
+                onPress={() => setDismissing(dismissing === alert.number ? null : alert.number)}
+              >
+                <Label style={styles.link}>{dismissing === alert.number ? 'keep it' : 'dismiss'}</Label>
+              </Pressable>
+            )}
+            {dismissing === alert.number && (
+              <Composer
+                actions={REASONS.map(([key, label]) => ({ key, label }))}
+                bare
+                demo={nav.demo}
+                doing="that dismissal"
+                onSubmit={async (key) => {
+                  await setAlertDismissed(nav.token ?? '', repo, alert.number, key as DismissReason);
+                  setDismissing(null);
+                  alerts.reload();
+                  return 'dismissed';
+                }}
+              />
+            )}
           </View>
         </View>
       ))}
@@ -741,6 +946,32 @@ const styles = themed(() =>
     newIssue: {
       alignSelf: 'flex-start',
       marginBottom: 12,
+    },
+    headRow: {
+      alignItems: 'center',
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 10,
+      justifyContent: 'space-between',
+      marginBottom: 6,
+    },
+    owner: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 14,
+      marginTop: 10,
+    },
+    link: {
+      color: colors.ink70,
+      textDecorationLine: 'underline',
+    },
+    newFile: {
+      marginBottom: 4,
+    },
+    releaseLinks: {
+      flexDirection: 'row',
+      gap: 14,
+      marginTop: 8,
     },
     release: {
       paddingBottom: 12,

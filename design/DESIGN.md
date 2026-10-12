@@ -279,9 +279,22 @@ Not a section: a full-screen page pushed **over** the sections and the bar, from
 `brief`, `cycle`, the inbox or a link, with its own back button and a `hardwareBackPress`
 handler.
 
-Header: title, state chip, the proportional add/delete rule, and a stat row. Then three tabs —
-`the brief` (the description, same renderer), `talk`, `files` — and a footer with `open on
-github` and `{head} → {base}`.
+Header: title, state chip, the proportional add/delete rule, and a stat row (the author is a
+link to their profile). Then four tabs — `the brief` (the description, same renderer, its
+reactions, and the **details**: labels, assignees, reviewers, milestone, each with `change`
+opening a picker in place, then `edit the title and description`, `assign me`, `lock
+conversation`), `talk`, `files`, `checks` — and a footer with `open on github` and `{head} →
+{base}`.
+
+**The merge box** sits at the end of `talk`, above the composer, on the card surface: one line
+saying whether it merges, in words (`ready to merge` in sage, `conflicts with main · they need
+resolving first` in clay, `behind main · update the branch first`, `github is still working out
+whether it merges`), then only the verbs this account may use here: the merge methods the
+repository allows (`merge`, `squash and merge`, `rebase and merge`, each pressed twice and pinned
+to the head that was on screen), `merge when ready` / `cancel auto-merge`, `update branch`,
+`ready for review` / `back to draft`, `close pull request` / `reopen`, and once it is closed or
+merged, `delete {branch}`. Someone who cannot push is told so rather than shown merge buttons
+that would fail. The line is `lib/pullState.ts` (`mergeLine`, tested).
 
 **`talk` is drawn in waves.** Every other surface in this app is ruled and filed and measured,
 and a review thread is none of those things; the wave is what marks the part of a pull request
@@ -291,6 +304,12 @@ by measuring it after layout — SVG cannot stretch to a sibling. Comments are s
 rules, each phase-shifted so stacked rules do not line up. A review thread carries the file it
 is anchored to and the few lines of diff it is arguing about, with its replies indented under
 their own spine.
+
+Under everything said sit its **tools** (`CommentTools`): the reactions as words with counts
+(`+1 3`, `heart 1`, yours filled; `react` opens all eight — never emoji, which would be the
+loudest colour on the page), `edit` and `delete` on your own, and what its kind allows — `reply
+in thread` and `resolve` / `unresolve` on a review thread, `dismiss review` on an approving or
+blocking review for someone who can push.
 
 **`files` is the actual patch.** `+54 −13` is the size of a change and tells you nothing about
 the change. Line numbers are recovered from the `@@` headers (a unified diff carries them
@@ -350,30 +369,56 @@ a `StateChip` (`open` ink, `closed` faint, `answered` sage) and the title on a c
 labels as outlined pills, the body rendered, then the
 replies on wavy spines (`Spoken`) — the discussion's accepted answer in sage
 and marked `the answer` in words, replies to replies nested under their own
-spine. At the end, the composer: `comment` and `close issue` / `reopen` for
-an issue, `reply` for a discussion. Replies GitHub has that were not fetched
-say so above the first one.
+spine. At the end, the composer: `comment`, `close as done`, `close as not
+planned` / `reopen` for an issue; `reply` and `close discussion` / `reopen`
+for a discussion. Replies GitHub has that were not fetched say so above the
+first one.
+
+Under the body, its reactions (and on a discussion `▲ n` to vote it up);
+under it, for an issue, the same **details** as a pull request's brief plus
+`pin to the repository`; for a discussion, `edit the title and post`. Every
+reply carries the pull request's comment tools; a discussion's replies add `▲
+n`, `mark as answer` / `not the answer`, and `reply to this` for the one level
+of nesting GitHub has.
 
 ### 16. `repo` — a repository, from the inside
 
 Pushed from a repo card, from a pull request's masthead, or from any link to
-a repository in rendered Markdown. Name, description, `★ ⑂ language
-private`, then five chips: `code · issues n · releases · discussions ·
-security`. The footer carries `open on github` and the default branch with
-what this token may do there (`you admin`, `you read`).
+a repository in rendered Markdown, or a link to one of its tabs (`/pulls`,
+`/actions/runs/…`, `/releases/tag/…`). Name, description, `★ ⑂ language
+private archived`, the owner (a link to their profile) and `forked from …`,
+then the repository's verbs as pills — `☆ star n` / `★ starred n`, `watch` /
+`watching`, `ignore` / `ignoring`, and `fork n` on someone else's (pressed
+twice; opens the fork) — then seven chips: `code · pulls n · issues n ·
+actions · releases · discussions · security`. The footer carries `open on
+github` and the default branch with what this token may do there (`you
+admin`, `you read`).
 
 - **code** — a search field over the repository's code (GitHub's REST code
   search: default branch only, ten searches a minute, both said on the
-  results), and under it a file browser: breadcrumbs, folders first with a
-  trailing `/`, files with their size.
-- **issues** — a filled `new issue` pill, then the open issues.
-- **releases** — the newest open, the rest folded; notes rendered.
-- **discussions** — category, title, replies, `answered`. Discussions that
-  are switched off say so; a token without `read:discussion` says that.
+  results), then `on {branch}` with `branches` (switch; and for writers `new
+  branch from {branch}` / `delete {branch}`) and `pull request` when the branch
+  is not the default, then a file browser: breadcrumbs, `new file here` for
+  writers, folders first with a trailing `/`, files with their size.
+- **pulls** — `open n` / `closed` chips and `new pull request`, then the
+  rows: number, title, `~author · head → base`.
+- **issues** — `open` / `closed` chips and a filled `new issue` pill, then
+  the issues.
+- **actions** — the workflows, each with `run` for writers (a box for
+  `key=value` inputs and `run on {default branch}`), then the latest runs:
+  a state chip in words (`passed`, `failed`, `running`), the title, `branch ·
+  event · ~actor`, `logs on github`, and `re-run failed` / `re-run all` /
+  `cancel` / `approve and run` as the run allows.
+- **releases** — `new release` for writers; the newest open, the rest folded;
+  notes rendered, `assets on github`, and `delete release` (pressed twice).
+- **discussions** — `new discussion`, then category, title, replies,
+  `answered`. Discussions that are switched off say so; a token without
+  `read:discussion` says that.
 - **security** — open Dependabot alerts, severity as a coloured rule *and* a
-  word, the vulnerable range and the fix. A token without `security_events`
-  is told so and linked to a token that has it — **an empty list is never
-  shown for "not allowed to look"**.
+  word, the vulnerable range and the fix, and for writers `dismiss` with the
+  five reasons GitHub takes. A token without `security_events` is told so and
+  linked to a token that has it — **an empty list is never shown for "not
+  allowed to look"**.
 
 ### 17. `file` — one file, readable and editable
 
@@ -389,7 +434,9 @@ or `commit to {branch}`. The first creates `login-patch-n`, commits there and
 opens the pull request, **forking first when the token cannot push to the
 repository**, which is what the website does for anyone who is not a
 collaborator. The new pull request replaces the file on the stack. Files past
-200 KB are not editable, and say so.
+200 KB are not editable, and say so. Someone who can push also has `delete`
+in the footer, pressed twice, committed onto the branch the file was read
+from.
 
 ### 18. `new issue`
 
@@ -401,6 +448,16 @@ written in the website's own shape (`### Label`, the answer, `_No response_`
 for a blank), so a repository's triage bots cannot tell the difference. The
 new issue replaces the form on the stack.
 
+### 18a. `new pull request`, `new release`, `new discussion`, `new file`, `new repository`, `new gist`
+
+Each is a few labelled fields (`CreateScreen.tsx`) over one bare composer
+whose verb names the thing that will exist — `open pull request`, `publish
+release` / `save as draft`, `start discussion`, `commit new file`, `create
+repository`, `create secret gist`. Choices are chips: the branches for
+`from` and `into`, a discussion's categories, `private`, `pre-release`.
+What was made replaces the form on the stack. A secret gist says that it is
+unlisted, not private.
+
 ### 19. `checks` — the fourth tab of `pull`
 
 Every check run on the head commit, red first, then what waits on you, what
@@ -411,6 +468,30 @@ then the actions: `re-run failed · {workflow}` for a failed Actions run,
 the reviewer is somebody else, it says that instead of offering a button. A
 failed Actions job opens to the end of its log: the error annotations in clay,
 then the last forty lines in mono.
+
+### 19a. `user` — a person or an organisation
+
+Pushed from any `~name` (a byline, a pull request's author, a repository's
+owner) or a github.com link to a login. Avatar, name, `~login`, bio, then
+facts as mono lines (`4,210 followers · 9 following`, company, place, `on
+github 15y`), the website as a link, `follow` / `following`, links to their
+gists and to a search of their repositories, then their repositories,
+recently pushed first. Your own adds `new repository`. An organisation has
+no follow and no gists.
+
+### 19b. `search` — across GitHub
+
+Pushed from `search github` on the `repos` block's head or from the account
+page. One field and four chips — `repositories · issues · pull requests ·
+people` — with the site's qualifiers passed through as typed (`is:open
+label:bug`). `n found · the first 30`, then rows that open the matching page.
+Code search stays on `repos` and in each repository.
+
+### 19c. `gists` and `gist`
+
+Your gists (secret ones marked `secret`) with `new gist`, or someone else's
+public ones. A gist opens to every file in it, selectable, with `☆ star` and,
+for your own, `delete gist` (pressed twice).
 
 ### 20. `review` — the queue, filed like pin03 (`inbox`)
 
@@ -483,6 +564,16 @@ scope`). Nothing is sent until a named button is pressed, and a failure
 leaves the text in the box. On the demo account every write answers `demo
 account · nothing was sent`.
 
+A write that is only a verb — merge, star, lock, a reaction — is the same
+composer **bare**: the row without the box. A toggle is a filled pill when
+it is on (`★ starred`, `following`, your reaction). Anything that cannot be
+taken back (merge, close, delete, fork, dismiss) is **pressed twice**: the
+first press fills the pill and changes its words to the question (`squash and
+merge? press again`, `delete it?`), the second sends. Reactions are `quiet`:
+the count moving is the receipt, and only a failure is written. Editing what
+you said opens the composer with your words already in it and a `cancel`.
+`design/ACTIONS.md` is the list of every action and where it lives.
+
 - `talk` ends in `comment`, and — on someone else's open pull request —
   `approve` (no words needed) and `request changes`.
 - `files` has a find field across every file (`n lines in m files`, matching
@@ -519,6 +610,9 @@ can act — and an account that cannot be read drops out of the sum with `could 
 read · left out of the charts` rather than taking the charts down. People with a work
 account asked for this: neither profile alone is what they did. Then a dashed
 `+ add account` (the token form, with `cancel`) and `forget ~login` for the others.
+
+**on github**: `your profile`, `your gists`, `new repository`, `search github`, as
+chips that push those pages.
 
 **at the foot of today**: the kinds the feed at the end of `today` lists, as chips.
 
@@ -581,7 +675,9 @@ pushes the rest.
   block is memoised and redraws only when its own data changes. The heavy commit
   history is asked for when `work` opens or when `today` is scrolled towards
   `hours`, never on launch.
-- **Detail is a stack.** `pull`, `thread`, `repo`, `file`, `new issue`, the folded
+- **Detail is a stack.** `pull`, `thread`, `repo`, `file`, `user`, `search`, `gists`,
+  `gist`, the forms that make something (`new issue`, `new pull request`, `new
+  release`, `new discussion`, `new file`, `new repository`, `new gist`), the folded
   lists (`queue`, `assigned`, `brief`, `people`), `account`, `share` and `add account`
   push over the sections and over each other, each with `←
   back` and the system back button wired to pop the top. A pushed page about one

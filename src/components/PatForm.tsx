@@ -42,12 +42,13 @@ interface PatFormProps {
 /**
  * The scopes the app can use, all of them: `repo` for private work and for
  * writing back, the two discussion scopes for reading and answering
- * discussions, and `security_events` for Dependabot alerts. Everything still
+ * discussions, `security_events` for Dependabot alerts, `user:follow` to follow
+ * people and `gist` for gists. Everything still
  * works on less — each screen says what its missing scope costs. Signing in
  * with GitHub asks for the same list (`OAUTH_SCOPES`).
  */
 export const TOKEN_SETTINGS_URL =
-  'https://github.com/settings/tokens/new?scopes=read:user,repo,read:discussion,write:discussion,security_events&description=git-huh';
+  'https://github.com/settings/tokens/new?scopes=read:user,repo,read:discussion,write:discussion,security_events,user:follow,gist&description=git-huh';
 
 /** Each way a sign-in can stop, in the words that say what to do next. */
 const FAILURE: Record<DeviceFailure, string> = {

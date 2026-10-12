@@ -150,6 +150,28 @@ export function AccountScreen() {
           <Micro style={styles.note}>the demo is one account · connect a token to add more</Micro>
         )}
 
+        <Label style={[styles.head, styles.gap]}>on github</Label>
+        <Micro style={styles.note}>your profile, gists and a new repository, and a search across everything</Micro>
+        <View style={styles.chips}>
+          {(
+            [
+              ['your profile', { kind: 'user', login: own?.login ?? current }],
+              ['your gists', { kind: 'gists' }],
+              ['new repository', { kind: 'new-repo' }],
+              ['search github', { kind: 'search' }],
+            ] as const
+          ).map(([label, route]) => (
+            <Pressable
+              accessibilityRole="button"
+              key={label}
+              onPress={() => nav.open(route)}
+              style={styles.chip}
+            >
+              <Label style={styles.ink}>{label}</Label>
+            </Pressable>
+          ))}
+        </View>
+
         <Notify />
 
         <Label style={[styles.head, styles.gap]}>at the foot of today</Label>

@@ -1,20 +1,42 @@
-import { useMemo } from 'react';
-import { Linking, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { useMemo, useState } from 'react';
+import {
+  Linking,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  TextInput,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 
+import { CommentTools, type Verb } from '../components/CommentTools';
 import { Composer } from '../components/Composer';
+import { Details } from '../components/Details';
 import { Markdown } from '../components/Markdown';
 import { OverlayFrame, SavedNote } from '../components/Overlay';
+import { Reactions } from '../components/Reactions';
 import { Spoken } from '../components/Spoken';
 import { Squiggle } from '../components/Squiggle';
 import { StateChip } from '../components/StateChip';
 import { Body, Data, Heading, Label, Micro } from '../components/Type';
 import { useRemote } from '../hooks/useRemote';
 import { demoThread } from '../lib/demo';
+import { eventually } from '../lib/eventually';
 import { GitHubError } from '../lib/github';
 import { useNav } from '../lib/nav';
-import { fetchThread } from '../lib/thread';
-import { addComment, addDiscussionComment, setIssueState } from '../lib/writes';
-import { colors, radii, space, themed } from '../theme';
+import { fetchThread, type Thread, type ThreadComment } from '../lib/thread';
+import {
+  addComment,
+  addDiscussionComment,
+  closeIssue,
+  editDiscussion,
+  replyInDiscussion,
+  setAnswer,
+  setDiscussionOpen,
+  setIssueState,
+  setUpvote,
+} from '../lib/writes';
+import { colors, fonts, radii, space, themed } from '../theme';
 import { ago } from './shared';
 
 /**
@@ -45,12 +67,16 @@ export function ThreadScreen({
   const state = useRemote(
     nav.token ? `${nav.token}|${type}|${repo}#${number}` : null,
     async (signal) => {
-      const thread = await fetchThread(nav.token ?? '', repo, number, type, signal);
+      // One started a second ago can still read as missing.
+      const thread = await eventually(
+        () => fetchThread(nav.token ?? '', repo, number, type, signal),
+        { signal },
+      );
       if (!thread) throw new GitHubError('missing', 'Not found.');
       return thread;
     },
     {
-      cacheKey: nav.login ? `${nav.login.toLowerCase()}-${type}-${repo}-${number}` : null,
+      cacheKey: nav.login ? `${nav.login.toLowerCase()}-${type}2-${repo}-${number}` : null,
       demo,
     },
   );
@@ -102,7 +128,13 @@ export function ThreadScreen({
           </View>
 
           <View style={styles.meta}>
-            <Data style={styles.metaText}>~{thread.author}</Data>
+            <Pressable
+              accessibilityRole="link"
+              hitSlop={6}
+              onPress={() => nav.open({ kind: 'user', login: thread.author })}
+            >
+              <Data style={styles.metaText}>~{thread.author}</Data>
+            </Pressable>
             <Data style={styles.metaText}>{ago(thread.createdAt)}</Data>
             {thread.category && <Data style={styles.metaText}>{thread.category}</Data>}
             {thread.labels.map((label) => (
@@ -115,6 +147,51 @@ export function ThreadScreen({
           <Squiggle amplitude={2.6} length={body} opacity={0.4} style={styles.rule} wavelength={14} />
 
           <Markdown source={thread.body} width={body} />
+
+          <View style={styles.bodyTools}>
+            {type === 'discussion' && (
+              <Composer
+                actions={[
+                  {
+                    key: 'vote',
+                    label: `▲ ${thread.upvotes}`,
+                    on: thread.upvoted,
+                    disabled: !thread.canUpvote,
+                  },
+                ]}
+                bare
+                demo={nav.demo}
+                doing="that vote"
+                onSubmit={async () => {
+                  await setUpvote(nav.token ?? '', thread.id, !thread.upvoted);
+                  state.reload();
+                  return thread.upvoted ? 'vote taken back' : 'voted up';
+                }}
+                quiet
+              />
+            )}
+            <Reactions onChanged={state.reload} reactions={thread.reactions} subjectId={thread.id} />
+          </View>
+
+          {type === 'issue' ? (
+            <Details
+              assignees={thread.assignees}
+              body={thread.body}
+              canUpdate={thread.canUpdate}
+              kind="issue"
+              labels={thread.labels.map((label) => label.name)}
+              locked={thread.locked}
+              milestone={thread.milestone}
+              nodeId={thread.id}
+              number={number}
+              onChanged={state.reload}
+              pinned={thread.pinned}
+              repo={repo}
+              title={thread.title}
+            />
+          ) : (
+            thread.canUpdate && <DiscussionEditor onChanged={state.reload} thread={thread} />
+          )}
 
           {thread.comments.length > 0 && <View style={styles.gap} />}
           {thread.moreComments > 0 && (
@@ -144,6 +221,25 @@ export function ThreadScreen({
                 tone={comment.isAnswer ? colors.yes : colors.ink70}
                 width={body}
               >
+                <CommentTools
+                  body={comment.body}
+                  canDelete={comment.canDelete}
+                  canEdit={comment.canEdit}
+                  editKind={type}
+                  onChanged={state.reload}
+                  reactions={comment.reactions}
+                  reply={
+                    type === 'discussion'
+                      ? {
+                          label: 'reply to this',
+                          send: (text) =>
+                            replyInDiscussion(nav.token ?? '', thread.id, comment.id, text),
+                        }
+                      : undefined
+                  }
+                  subjectId={comment.id}
+                  verbs={discussionVerbs(nav.token ?? '', type, comment)}
+                />
                 {comment.replies.map((reply) => (
                   <Spoken
                     at={reply.createdAt}
@@ -155,7 +251,18 @@ export function ThreadScreen({
                     seed={reply.id}
                     tone={colors.ink40}
                     width={body - 20}
-                  />
+                  >
+                    <CommentTools
+                      body={reply.body}
+                      canDelete={reply.canDelete}
+                      canEdit={reply.canEdit}
+                      editKind="discussion"
+                      onChanged={state.reload}
+                      reactions={reply.reactions}
+                      subjectId={reply.id}
+                      verbs={discussionVerbs(nav.token ?? '', type, reply, false)}
+                    />
+                  </Spoken>
                 ))}
               </Spoken>
             </View>
@@ -166,11 +273,23 @@ export function ThreadScreen({
               type === 'issue'
                 ? [
                     { key: 'comment', label: 'comment', primary: true },
-                    thread.state === 'CLOSED'
-                      ? { key: 'reopen', label: 'reopen', allowEmpty: true }
-                      : { key: 'close', label: 'close issue', allowEmpty: true },
+                    ...(thread.state === 'CLOSED'
+                      ? [{ key: 'reopen', label: 'reopen', allowEmpty: true }]
+                      : [
+                          { key: 'close', label: 'close as done', allowEmpty: true },
+                          { key: 'not-planned', label: 'close as not planned', allowEmpty: true },
+                        ]),
                   ]
-                : [{ key: 'reply', label: 'reply', primary: true }]
+                : [
+                    { key: 'reply', label: 'reply', primary: true },
+                    ...(thread.canUpdate
+                      ? [
+                          thread.closed
+                            ? { key: 'reopen', label: 'reopen', allowEmpty: true }
+                            : { key: 'close', label: 'close discussion', allowEmpty: true },
+                        ]
+                      : []),
+                  ]
             }
             demo={nav.demo}
             doing={type === 'issue' ? 'that comment' : 'that reply'}
@@ -180,11 +299,15 @@ export function ThreadScreen({
                 if (type === 'issue') await addComment(token, thread.id, text);
                 else await addDiscussionComment(token, thread.id, text);
               }
-              if (action === 'close' || action === 'reopen') {
-                await setIssueState(token, repo, number, action === 'close' ? 'closed' : 'open');
+              if (type === 'discussion' && (action === 'close' || action === 'reopen')) {
+                await setDiscussionOpen(token, thread.id, action === 'reopen');
+              } else if (action === 'close' || action === 'not-planned') {
+                await closeIssue(token, repo, number, action === 'close' ? 'completed' : 'not_planned');
+              } else if (action === 'reopen') {
+                await setIssueState(token, repo, number, 'open');
               }
               state.reload();
-              return action === 'close'
+              return action === 'close' || action === 'not-planned'
                 ? 'closed'
                 : action === 'reopen'
                   ? 'reopened'
@@ -195,6 +318,84 @@ export function ThreadScreen({
         </ScrollView>
       )}
     </OverlayFrame>
+  );
+}
+
+/** Vote up, and mark or unmark the answer: what a discussion reply can have done to it. */
+function discussionVerbs(
+  token: string,
+  type: 'issue' | 'discussion',
+  comment: ThreadComment,
+  answerable = true,
+): Verb[] {
+  if (type !== 'discussion') return [];
+  const verbs: Verb[] = [];
+  if (comment.upvotes !== undefined) {
+    verbs.push({
+      action: {
+        key: 'vote',
+        label: `▲ ${comment.upvotes}`,
+        on: comment.upvoted ?? false,
+        disabled: !comment.canUpvote,
+      },
+      run: async () => {
+        await setUpvote(token, comment.id, !comment.upvoted);
+        return comment.upvoted ? 'vote taken back' : 'voted up';
+      },
+    });
+  }
+  if (answerable && (comment.canMarkAnswer || comment.canUnmarkAnswer)) {
+    verbs.push({
+      action: { key: 'answer', label: comment.isAnswer ? 'not the answer' : 'mark as answer' },
+      run: async () => {
+        await setAnswer(token, comment.id, !comment.isAnswer);
+        return comment.isAnswer ? 'unmarked' : 'marked as the answer';
+      },
+    });
+  }
+  return verbs;
+}
+
+/** A discussion's title and opening post, edited in place. */
+function DiscussionEditor({ thread, onChanged }: { thread: Thread; onChanged: () => void }) {
+  const nav = useNav();
+  const [open, setOpen] = useState(false);
+  const [title, setTitle] = useState(thread.title);
+
+  if (!open) {
+    return (
+      <Pressable
+        accessibilityRole="button"
+        hitSlop={6}
+        onPress={() => {
+          setTitle(thread.title);
+          setOpen(true);
+        }}
+        style={styles.editLink}
+      >
+        <Label style={styles.underline}>edit the title and post</Label>
+      </Pressable>
+    );
+  }
+  return (
+    <View>
+      <TextInput onChangeText={setTitle} style={styles.titleInput} value={title} />
+      <Composer
+        actions={[{ key: 'save', label: 'save', primary: true }]}
+        compact
+        demo={nav.demo}
+        doing="that edit"
+        initial={thread.body}
+        onCancel={() => setOpen(false)}
+        onSubmit={async (_, text) => {
+          await editDiscussion(nav.token ?? '', thread.id, { title: title.trim() || thread.title, body: text });
+          setOpen(false);
+          onChanged();
+          return 'saved';
+        }}
+        placeholder="the post"
+      />
+    </View>
   );
 }
 
@@ -237,6 +438,25 @@ const styles = themed(() =>
     rule: {
       marginBottom: 6,
       marginTop: 10,
+    },
+    bodyTools: {
+      gap: 4,
+      marginTop: 12,
+    },
+    editLink: {
+      marginTop: 18,
+    },
+    titleInput: {
+      backgroundColor: colors.card,
+      borderColor: colors.hair,
+      borderRadius: radii.tile,
+      borderWidth: 1,
+      color: colors.ink,
+      fontFamily: fonts.mono,
+      fontSize: 14,
+      marginTop: 18,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
     },
     gap: {
       height: 18,

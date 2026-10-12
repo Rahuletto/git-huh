@@ -35,15 +35,28 @@ not a second row of tabs.
 It also does the things that usually end with "I'll do it on the laptop":
 
 - **Review and reply.** Approve, request changes, comment on any line of a
-  diff (including unchanged ones), reply to issues and discussions, close an
-  issue.
+  diff (including unchanged ones), reply inside a review thread and resolve
+  it, react, edit or delete what you said, reply to issues and discussions.
+- **Merge.** Merge, squash or rebase (whichever the repository allows), merge
+  when ready, update the branch, back to draft, close, and delete the branch
+  afterwards.
+- **Triage.** Labels, assignees, reviewers, milestones, lock and pin; close an
+  issue as done or as not planned; vote, mark the answer and close a
+  discussion.
 - **CI.** Checks and workflow runs on a pull request, the tail of a failing
   log, re-run failed jobs, approve a first-time contributor's run or a
-  pending deployment.
-- **Repositories.** Browse files, search the code, read releases, open
-  issues (issue forms included), discussions and Dependabot alerts.
+  pending deployment. A repository's workflows, runnable by hand, and its
+  latest runs to re-run or cancel.
+- **Repositories.** Star, watch, fork. Browse files on any branch, make and
+  delete branches, search the code, open pull requests, publish releases,
+  start discussions, open issues (issue forms included), dismiss Dependabot
+  alerts, and create a repository.
 - **Small changes.** Edit a file and propose it as a pull request. Without
-  push access it goes through a fork, the way the website does it.
+  push access it goes through a fork, the way the website does it. Add a new
+  file, or delete one.
+- **People, search and gists.** Any `~name` opens their profile, where you
+  can follow them. Search repositories, issues, pull requests and people.
+  Read, write and star gists.
 - **Notifications without a server.** Android wakes the app about every
   fifteen minutes; anything new that is addressed to you becomes a
   notification. Nothing is pushed from anywhere.
@@ -54,6 +67,9 @@ It also does the things that usually end with "I'll do it on the laptop":
 - **Share a chart** as a 4:3 image, drawn for a timeline rather than cropped
   from the phone.
 - A **demo** with generated data if you want to look before signing in.
+
+`design/ACTIONS.md` lists every GitHub action, grouped by object: what the
+app can do, where each one is, and why the rest are left out.
 
 The widget is the dot field and a line from your own history, travelling
 across the card: no counts, no badges, today marked with a plus in the corner.
@@ -80,7 +96,7 @@ nothing but GitHub ever sees the token. An organisation that restricts
 third-party apps stays hidden until it approves git-huh; the account page
 links to where you ask.
 
-Or paste a [classic personal access token](https://github.com/settings/tokens/new?scopes=read:user,repo,read:discussion,write:discussion,security_events&description=git-huh)
+Or paste a [classic personal access token](https://github.com/settings/tokens/new?scopes=read:user,repo,read:discussion,write:discussion,security_events,user:follow,gist&description=git-huh)
 with the same scopes (a fine-grained token works too), or tap **try the demo**:
 
 | scope | what it is for |

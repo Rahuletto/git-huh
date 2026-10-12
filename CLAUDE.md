@@ -14,12 +14,21 @@ the home-screen widget itself — a Glance widget on Android and a WidgetKit one
 iOS, drawing the same card from the same payload. It follows the system into
 dark mode.
 
-It also *acts*, because that is what the lists in
-`design/STORIES.md` asked for: an inbox you can put things away in,
-notifications without a server, review and reply, line comments, CI with
-re-run and approvals, repositories with code search, files you can edit into
-a pull request, issues (forms included), discussions, releases, security
-alerts, several accounts, and everything readable offline.
+It also *acts*, and the aim is that **anything you can do on GitHub that
+makes sense on a phone can be done here**. That covers an inbox you can put
+things away in, notifications without a server, review and reply, line
+comments, threads you can resolve, reactions, editing and deleting what you
+said, merging (every method, auto-merge, update branch, draft, close, delete
+the branch), labels, assignees, reviewers, milestones, lock and pin, CI with
+re-run, cancel, approvals and workflows run by hand, repositories with code
+search, star, watch and fork, branches, files you can create, edit into a
+pull request or delete, new pull requests, releases, issues (forms
+included), discussions (votes, answers, nested replies), security alerts you
+can dismiss, profiles and follow, search across GitHub, gists, several
+accounts, and everything readable offline. **`design/ACTIONS.md` is the
+inventory**: every GitHub action by object, where it lives, and why the ones
+left out are left out (settings, deleting repositories, and anything that
+needs the `notifications` scope).
 
 It is personal: you sign in with GitHub (OAuth's device flow, no server, no
 client secret) or paste a token, for one account or several, and nothing
@@ -32,7 +41,7 @@ they live beside it, in the workspace's `board/` — so never commit them,
 screenshots with real account data, or anything else that is not ours to
 publish.
 
-Three documents govern the work and all three are part of it:
+Four documents govern the work and all four are part of it:
 
 - **`design/LANGUAGE.md`** — the design language: colour, type, space,
   motion, patterns, the prohibitions. Read this before designing anything.
@@ -42,8 +51,10 @@ Three documents govern the work and all three are part of it:
   lists (what people want from a GitHub app, what they hate about GitHub's
   own). It is the argument behind the five sections; read it before moving a
   screen or adding one.
+- **`design/ACTIONS.md`** — every action GitHub has, and where it is in the
+  app or why it is not. Adding or removing a write updates it.
 
-Keep all three current in the same change that makes them wrong.
+Keep all four current in the same change that makes them wrong.
 
 ## Shipping — build the APK and upload it, every time
 
@@ -136,10 +147,15 @@ compiled on a Mac.
   `Brief` a tile and the pushed reader; `People` the block and a pushed page of
   everyone. Plus `Loading` (the widget's card with a light sweeping its dots,
   shown while the first request is in flight), `Dots` (unlinked legacy view),
-  and the other pushed pages: `Pull`, `Thread` (issue or discussion), `Repo`,
-  `File`, `NewIssue`, `Account` (behind the avatar in every section's
-  top-right corner: accounts, which are added together, notifications, what
-  the foot of `today` lists) and `Share` (a chart as a 4:3 image).
+  and the other pushed pages: `Pull`, `Thread` (issue or discussion), `Repo`
+  (its `pulls`, `actions` and branch row are in `RepoTabs.tsx`), `File`,
+  `NewIssue`, `User` (a profile, from any `~name`), `Search` (across GitHub),
+  `Gists` (the list and one gist), `Create` (the forms that make a pull
+  request, a release, a discussion, a file, a repository, a gist), `Account`
+  (behind the avatar in every section's top-right corner: accounts, which are
+  added together, notifications, links to your profile, gists, a new
+  repository and search, what the foot of `today` lists) and `Share` (a chart
+  as a 4:3 image).
 - **Pushed pages are a stack** (`src/lib/nav.tsx`, rendered over the tabs in
   `app/(tabs)/_layout.tsx`). Screens reach it with `useNav()`, which also carries the
   token, the login and whether this is the demo — do not thread those
@@ -152,10 +168,30 @@ compiled on a Mac.
   use it rather than a hand-rolled hook. Cache keys start with the lowercase
   login and a dash, so `accountStore.remove` can clear an account's answers.
 - **Every GitHub write** is in `src/lib/writes.ts` (comments, reviews, line
-  comments, issues, the edit → branch → pull request flow including the
-  fork fallback) and `src/lib/checks.ts` (re-run, approvals), and every
-  GitHub write in the UI goes through `src/components/Composer.tsx`. On the demo
-  token the composer answers `nothing was sent` and never calls them.
+  comments, reactions, edits and deletes, issues, labels, assignees,
+  milestones, lock, pin, merging and the rest of a pull request's state,
+  threads, discussions, stars, watching, forks, branches, files, releases,
+  alerts, follows, gists, the edit → branch → pull request flow including the
+  fork fallback) and `src/lib/checks.ts` (re-run, cancel, approvals,
+  workflow dispatch), and every GitHub write in the UI goes through
+  `src/components/Composer.tsx` — `bare` for a write that is only a verb,
+  `confirm` on anything that cannot be undone (pressed twice), `on` for a
+  toggle, `initial` + `onCancel` for an edit. On the demo token the composer
+  answers `nothing was sent` and never calls them. The pieces built on it:
+  `Reactions`, `CommentTools` (react, reply, edit, delete and a comment's own
+  verbs), `Details` + `Picker` (an issue's or pull request's side column),
+  `MergeBox`. **Check a new mutation against the live schema** before
+  shipping it: a field GitHub does not have fails the whole request, and the
+  pull request page with it. A throwaway test that calls the function with a
+  made-up node id gets `Could not resolve to a node` when the schema is right
+  and a validation error when it is not, and changes nothing.
+- `src/lib/explore.ts` — the reads behind the pickers (labels, assignable
+  people, milestones, branches, discussion categories), a repository's pull
+  requests, profiles (`fetchProfile` asks for the login as a user *and* an
+  organisation, so it passes `executeQuery`'s `missingIsAnswer`), search
+  across GitHub, and gists. `src/lib/reactions.ts` (the eight reactions as
+  words) and `src/lib/pullState.ts` (the merge box's line) are pure and
+  tested.
 - `src/lib/ideas.ts` + `ideasStorage.ts` — project notes in a dedicated document
   file (localStorage on web), outside account caches, with a separate demo
   notebook. Storage failures reach the editor instead of being swallowed.
@@ -224,9 +260,12 @@ compiled on a Mac.
   built from search plus each PR's comment and review connections
   **deliberately not** from the notifications API, which would need a
   `notifications` scope the app never asks for. The scopes it *does* ask for
-  are in `TOKEN_SETTINGS_URL` (`PatForm.tsx`): `read:user, repo,
-  read:discussion, write:discussion, security_events`. Every screen works on
-  less and says what the missing scope costs.
+  are in `TOKEN_SETTINGS_URL` (`PatForm.tsx`) and `OAUTH_SCOPES`: `read:user,
+  repo, read:discussion, write:discussion, security_events, user:follow,
+  gist`. Every screen works on less and says what the missing scope costs.
+  **Following a single thread is not offered**: GraphQL's `updateSubscription`
+  needs `notifications`. Watching a repository uses the REST endpoint, which
+  `repo` covers.
 - `src/lib/messageCache.ts` — the pool of commit messages the loading screen
   and the widget's strip are made of. It has to be on screen before the request
   that would fetch them, hence the cache; it is refetched only when more than
@@ -346,7 +385,16 @@ machine:
   Point it at the reversed port instead by writing
   `/data/data/app.githuh/shared_prefs/app.githuh_preferences.xml` with
   `<string name="debug_http_host">localhost:8081</string>` (needs `adb root`),
-  then force-stop and relaunch.
+  then force-stop and relaunch. A file written as root also needs the app's
+  owner (`chown`) and its SELinux label, categories included (`chcon` to
+  whatever `ls -Zd /data/data/app.githuh` shows), or it is silently ignored.
+- **Check the emulator is running a debug build at all.** If a release build
+  with a higher `versionCode` is installed, `adb install -r` of an older
+  debug APK fails with `INSTALL_FAILED_VERSION_DOWNGRADE`, and the release
+  build keeps launching with its own bundle — every screen looks like the
+  old code and no dev menu opens. Uninstall it first (`adb uninstall
+  app.githuh`; on the emulator that is demo data). A fresh bundle request in
+  Metro's log (`Android Bundled … (1700+ modules)`) is the sign it worked.
 
 Build the debug APK with `./gradlew assembleDebug -PreactNativeArchitectures=x86_64`
 — one ABI is about half the native compile. Warm the bundle with a request to
@@ -358,7 +406,7 @@ JVM `SIGBUS` in `PerfLongVariant::sample`, delete the offending
 `node_modules/*/android/.cxx` directory and pass
 `-Dorg.gradle.jvmargs="… -XX:-UsePerfData"`.
 
-## Six traps
+## Seven traps
 
 ### A token without `repo` returns a smaller, valid, wrong year
 
@@ -383,6 +431,20 @@ Two separate things follow from it and both are load-bearing:
 `useTokenScopes` only reports `limited` when it is certain: classic PATs send
 `x-oauth-scopes`, fine-grained ones send nothing, and there is nothing to infer
 from silence, so those stay quiet.
+
+### A saved answer outlives the shape it was saved in
+
+Every read draws the saved answer first (`useRemote`), so the first frame
+after an update is the **previous build's** data run through the **new
+build's** screen. 0.0.7 added reactions, assignees and merge methods to the
+pull request; a phone that had opened that pull request under 0.0.6 read the
+old copy, `reactions.map` threw, and opening any saved pull request crashed
+the app — a fresh install (the emulator) never shows it. **When a cached
+type gains or changes a field, bump its cache key** (`-pull2-`, `-issue2-`,
+`-repo2-`, as `messageCache` bumps `VERSION`), and keep components that draw
+a list tolerant of it being missing. To reproduce one: open the page, pull
+its file out of `files/githuh-store/`, strip the new fields, push it back,
+go offline and open it again.
 
 ### react-native-svg text in a downloaded font
 

@@ -258,6 +258,11 @@ export async function executeQuery<T>(
   schema: z.ZodType<T>,
   signal?: AbortSignal,
   variables?: Record<string, unknown>,
+  /**
+   * Keep the data when every error is a NOT_FOUND: a query that asks for a
+   * login as both a user and an organisation always gets one of each.
+   */
+  missingIsAnswer = false,
 ): Promise<T> {
   let response: Response;
   try {
@@ -288,7 +293,9 @@ export async function executeQuery<T>(
   } catch {
     throw unexpected();
   }
-  if (body.errors?.length) {
+  const onlyMissing =
+    missingIsAnswer && body.data != null && body.errors?.every((error) => error.type === 'NOT_FOUND');
+  if (body.errors?.length && !onlyMissing) {
     const first = body.errors[0];
     const message = first?.message ?? 'Unknown GraphQL error.';
     const kind: GitHubErrorKind = /bad credentials/i.test(message)

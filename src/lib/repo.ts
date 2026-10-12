@@ -14,6 +14,8 @@ import { encodePath } from './writes';
  */
 
 export interface RepoInfo {
+  /** Node id — what a star or a watch is attached to. */
+  id: string;
   nameWithOwner: string;
   description: string;
   url: string;
@@ -25,12 +27,20 @@ export interface RepoInfo {
   /** ADMIN · MAINTAIN · WRITE · TRIAGE · READ — what this token may do here. */
   permission: string | null;
   openIssues: number;
+  openPulls: number;
   discussionsEnabled: boolean;
+  starred: boolean;
+  /** SUBSCRIBED (watching) · UNSUBSCRIBED (participating) · IGNORED. */
+  subscription: string | null;
+  /** The repository this one was forked from. */
+  parent: string | null;
+  archived: boolean;
 }
 
 const infoSchema = z.object({
   repository: z
     .object({
+      id: z.string(),
       nameWithOwner: z.string(),
       description: z.string().nullable(),
       url: z.string(),
@@ -42,6 +52,11 @@ const infoSchema = z.object({
       hasDiscussionsEnabled: z.boolean(),
       primaryLanguage: z.object({ name: z.string(), color: z.string().nullable() }).nullable(),
       issues: z.object({ totalCount: z.number() }),
+      pullRequests: z.object({ totalCount: z.number() }),
+      viewerHasStarred: z.boolean(),
+      viewerSubscription: z.string().nullable(),
+      parent: z.object({ nameWithOwner: z.string() }).nullable(),
+      isArchived: z.boolean(),
     })
     .nullable(),
 });
@@ -57,8 +72,10 @@ export async function fetchRepoInfo(
     /* GraphQL */ `
       query Repo {
         repository(owner: ${JSON.stringify(owner)}, name: ${JSON.stringify(name)}) {
-          nameWithOwner description url stargazerCount forkCount isPrivate
-          viewerPermission hasDiscussionsEnabled
+          id nameWithOwner description url stargazerCount forkCount isPrivate
+          viewerPermission hasDiscussionsEnabled viewerHasStarred viewerSubscription isArchived
+          parent { nameWithOwner }
+          pullRequests(states: OPEN) { totalCount }
           defaultBranchRef { name }
           primaryLanguage { name color }
           issues(states: OPEN) { totalCount }
@@ -71,6 +88,7 @@ export async function fetchRepoInfo(
   const repository = data.repository;
   if (!repository) return null;
   return {
+    id: repository.id,
     nameWithOwner: repository.nameWithOwner,
     description: repository.description ?? '',
     url: repository.url,
@@ -83,7 +101,12 @@ export async function fetchRepoInfo(
       : null,
     permission: repository.viewerPermission,
     openIssues: repository.issues.totalCount,
+    openPulls: repository.pullRequests.totalCount,
     discussionsEnabled: repository.hasDiscussionsEnabled,
+    starred: repository.viewerHasStarred,
+    subscription: repository.viewerSubscription,
+    parent: repository.parent?.nameWithOwner ?? null,
+    archived: repository.isArchived,
   };
 }
 
@@ -282,8 +305,13 @@ const issuesSchema = z.array(
   }),
 );
 
-export async function listIssues(token: string, repo: string, signal?: AbortSignal): Promise<IssueRow[]> {
-  const issues = await rest(token, `/repos/${repo}/issues?state=open&per_page=30`, {
+export async function listIssues(
+  token: string,
+  repo: string,
+  signal?: AbortSignal,
+  state: 'open' | 'closed' = 'open',
+): Promise<IssueRow[]> {
+  const issues = await rest(token, `/repos/${repo}/issues?state=${state}&per_page=30`, {
     schema: issuesSchema,
     signal,
   });
