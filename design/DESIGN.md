@@ -219,12 +219,19 @@ with an empty notebook. The old `DotsScreen` remains unlinked source.
 
 ### 9b. `host` — a machine of yours, from the phone
 
-The fifth tab, where `inbox` was. Its numbers come from `host/hostd.py`, a
-small server the user runs on their own machine and reaches over their
-tailnet; `host/README.md` is its manual. The app knows nothing about any
+The fifth tab, where `inbox` was. Its numbers come from `hostd`, a
+companion server the user runs on their own machine and reaches over their
+tailnet (its own repository). The app knows nothing about any
 service: it draws the kinds the host's JSON names.
 
-Not connected, the page is one card: what to run, an address field (a
+Not connected, the page explains itself first (`HostIntro`): one sentence
+(`your computer, from your phone`), a diagram (this tab → your tailnet →
+your machine → what it reads, as nodes on a dotted wire with a dot
+travelling down each wire for a request), the page as it will look — drawn
+from the demo host at a third of its weight, a light sweeping through its
+blocks so it reads as a preview, labelled `demo numbers` — and `set it up` in
+three numbered steps. All of it runs on one looping value on the native
+driver and stops off screen. Then the `connect` card: an address field (a
 `….ts.net` name), a token field, and `connect`, which asks the host before
 anything is saved, so a typo is said there and not as an empty page. The
 address and the token are kept in the keystore beside the GitHub token.

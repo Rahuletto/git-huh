@@ -30,14 +30,15 @@ inventory**: every GitHub action by object, where it lives, and why the ones
 left out are left out (settings, deleting repositories, and anything that
 needs the `notifications` scope).
 
-It also watches **a machine of yours**: the `host` section reads
-`host/hostd.py`, a small standard-library Python server you run on your own
-computer and reach over your tailnet. It reports the machine's CPU, memory,
+It also watches **a machine of yours**: the `host` section is a client of
+`hostd`, a companion server you run on your own computer and reach over your
+tailnet. It lives in its own repository (private, work in progress, being
+rebuilt on gRPC/protobuf; the client here will follow its API). It reports the machine's CPU, memory,
 heat and disks, the services its JSON config names (a systemd unit or a
 process), their health, CPU, memory and logs, the actions the config allows
 (restart, stop, your own commands), and any panels the config defines. The
-app draws the kinds it is given and knows nothing about any particular service
-(`host/README.md` is the config's manual).
+app draws the kinds it is given and knows nothing about any particular
+service. Until one is connected, the tab explains itself (`HostIntro`).
 
 It is personal: you sign in with GitHub (OAuth's device flow, no server, no
 client secret) or paste a token, for one account or several, and nothing
@@ -212,18 +213,19 @@ compiled on a Mac.
   version-1 notebook is migrated on read, never rejected. `new-repo` takes
   `name`, `description` and `idea`, and links the repository it makes back to
   that idea.
-- **The host section.** `host/hostd.py` is the server (stdlib Python, one
-  file, `host/README.md` for its config and API, `host/test_hostd.py` for its
-  shaping rules: `python3 -m unittest host/test_hostd.py`). In the app,
+- **The host section** is a client of `hostd` (its own private repository;
+  the server, its config and its API are documented there). In the app,
   `src/lib/host.ts` (types, formatting, `squeeze`, the demo host — pure and
   tested), `src/lib/hostClient.ts` (the requests, and the address and token in
   the keystore), `src/hooks/useHost.ts` (settings shared across pages; polling
   every `every` seconds only while on screen) and `src/components/HostPanel.tsx`
   (one panel per kind, `Series`, `Meter`, `LogLines`). Release builds allow
   plain `http` only to `*.ts.net` (`android/app/src/release/res/xml/network_security_config.xml`);
-  an IP address will not connect, a MagicDNS name will. **Never commit a real
-  host config** — `config.example.json` is generic; a real one names private
-  services and lives in `~/.config/hostd/`.
+  an IP address will not connect, a MagicDNS name will. `HostParts.tsx` holds
+  the machine cards and service rows shared by the live page and the preview
+  in `HostIntro.tsx` (what the tab is, a diagram, the page drawn from the demo
+  host with a light sweeping it, and the three steps to set it up). **Never
+  put a real host's service names in this repository.**
 - `src/lib/triage.ts` + `src/hooks/useTriage.ts` — the inbox's own done /
   snooze marks, per account, on the device.
 - `src/lib/notify.ts` — the background inbox check (expo-background-task,

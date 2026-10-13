@@ -120,7 +120,7 @@ one keeps those endings inside.
     My machine runs a few things I care about: a website, a watcher, a
     bridge. On the bus I want to know they are up and answering, see what
     one has been saying in its log, and restart the one that is stuck,
-    without a laptop or an SSH app. → `host`, served by `host/hostd.py` over
+    without a laptop or an SSH app. → `host`, served by `hostd` over
     the tailnet; what is shown is whatever its JSON config says.
 
 ### ideas — *what to build next*

@@ -31,7 +31,7 @@ not a second row of tabs.
 | **work** | review · assigned · inbox · pulls · the brief · cycle · repos | what wants you first: how many are waiting on your review and what is assigned to you, each a card with a dot for every wait, then the inbox (review requests, mentions, reviews and replies; swipe to mark done or snooze until morning). Then your open pull requests, your descriptions read one after another, time to merge, a deck of repositories |
 | **year** | weeks · split · languages · years · people | every year of contributions, where they went, what they were written in, and who you reviewed with |
 | **ideas** | project ideas | a notebook of projects saved on this device: stages from idea to shipped, steps with progress, and a repository made from an idea and linked back to it |
-| **host** | the machine · services · panels | a computer of yours over your tailnet: CPU, memory, heat and disks; each service up or down, answering or not, its CPU, memory and log, restart and stop; and any graphs, lists or tables you define in a JSON file. Served by [`host/hostd.py`](host/README.md), one Python file |
+| **host** | the machine · services · panels | a computer of yours over your tailnet: CPU, memory, heat and disks; each service up or down, answering or not, its CPU, memory and log, restart and stop; and any graphs, lists or tables you define in a JSON file. Served by `hostd`, a companion server (private, work in progress) |
 
 It also does the things that usually end with "I'll do it on the laptop":
 

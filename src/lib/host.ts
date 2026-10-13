@@ -1,5 +1,5 @@
 /**
- * The `host` section's data: what `host/hostd.py` serves about one machine —
+ * The `host` section's data: what `hostd` (a companion server) serves about one machine —
  * its CPU, memory and disks, the services it was told to watch, their logs,
  * and whatever panels its config defines.
  *
@@ -265,7 +265,7 @@ function wave(count: number, base: number, swing: number, seed: number): number[
 const DEMO_NOW = 1_760_000_000;
 
 /** A machine for the demo account and the screenshots: no real host is asked. */
-export function demoOverview(): Overview {
+export function demoOverview(now: number = DEMO_NOW): Overview {
   const panels: Panel[] = [
     { ...meta('load', 'load · 1 min', 'series'), value: 0.8, series: wave(120, 0.9, 0.5, 3) },
     { ...meta('root', 'disk /', 'stat', '%'), max: 100, value: 71 },
@@ -297,9 +297,9 @@ export function demoOverview(): Overview {
       series: { cpu: wave(120, 14, 9, 1), memory: wave(120, 56, 3, 2), temperature: wave(120, 51, 4, 4) },
     },
     services: [
-      demoService('site', 'website', 'active', true, 2.1),
-      demoService('watcher', 'page watcher', 'active', true, 0.4),
-      demoService('backup', 'nightly backup', 'inactive', false, 0),
+      demoService('site', 'website', 'active', true, 2.1, now),
+      demoService('watcher', 'page watcher', 'active', true, 0.4, now),
+      demoService('backup', 'nightly backup', 'inactive', false, 0, now),
     ],
     panels,
   };
@@ -319,16 +319,16 @@ function meta(id: string, title: string, kind: PanelKind, unit = ''): PanelMeta 
   };
 }
 
-function demoService(id: string, name: string, state: string, ok: boolean, cpu: number): ServiceState {
+function demoService(id: string, name: string, state: string, ok: boolean, cpu: number, now: number): ServiceState {
   return {
     id,
     name,
     state,
     sub: state === 'active' ? 'running' : 'dead',
-    since: state === 'active' ? DEMO_NOW - 3 * 86_400 : null,
+    since: state === 'active' ? now - 3 * 86_400 - 4 * 3600 : null,
     memory: state === 'active' ? 180 * 2 ** 20 : null,
     cpu,
-    health: state === 'active' ? { ok, detail: 'http 200', ms: 4, at: DEMO_NOW } : null,
+    health: state === 'active' ? { ok, detail: 'http 200', ms: 4, at: now } : null,
     series: {
       cpu: state === 'active' ? wave(120, cpu, cpu / 2, id.length) : Array(120).fill(null),
       up: Array(120).fill(state === 'active' ? 1 : 0),

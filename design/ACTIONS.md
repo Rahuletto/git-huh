@@ -8,8 +8,8 @@ added or removed changes this file in the same commit.
 github.com. **no** means it is left out on purpose, with the reason.
 
 The `host` section's actions (restart, stop, a service's own verbs) are not
-GitHub's and are not listed here: they are whatever `host/hostd.py`'s config
-allows, and `host/README.md` documents them.
+GitHub's and are not listed here: they are whatever the `hostd` server's
+config allows, and that server's repository documents them.
 
 Every write goes through `Composer` (`src/components/Composer.tsx`). The
 functions behind them are in `src/lib/writes.ts`, plus `src/lib/checks.ts` for
