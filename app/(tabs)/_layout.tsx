@@ -1,10 +1,11 @@
 import { StatusBar } from 'expo-status-bar';
 import { NativeTabs } from 'expo-router/unstable-native-tabs';
 import { memo, useEffect } from 'react';
-import { BackHandler, Platform, Pressable, StyleSheet, View } from 'react-native';
+import { BackHandler, Platform, StyleSheet, View } from 'react-native';
 
+import { IconPill } from '../../src/components/Icon';
 import { PatForm } from '../../src/components/PatForm';
-import { Body, Label } from '../../src/components/Type';
+import { Body } from '../../src/components/Type';
 import { NavContext, type Route } from '../../src/lib/nav';
 import { tokenStore } from '../../src/lib/token';
 import { AccountScreen } from '../../src/screens/AccountScreen';
@@ -20,6 +21,7 @@ import {
 } from '../../src/screens/CreateScreen';
 import { FileScreen } from '../../src/screens/FileScreen';
 import { GistScreen, GistsScreen } from '../../src/screens/GistsScreen';
+import { InboxPage } from '../../src/screens/InboxScreen';
 import { LoadingScreen } from '../../src/screens/LoadingScreen';
 import { NewIssueScreen } from '../../src/screens/NewIssueScreen';
 import { PeoplePage } from '../../src/screens/PeopleScreen';
@@ -27,6 +29,7 @@ import { PullScreen } from '../../src/screens/PullScreen';
 import { QueuePage } from '../../src/screens/QueueScreen';
 import { RepoScreen } from '../../src/screens/RepoScreen';
 import { SearchScreen } from '../../src/screens/SearchScreen';
+import { ServiceScreen } from '../../src/screens/ServiceScreen';
 import { ShareScreen } from '../../src/screens/ShareScreen';
 import { ThreadScreen } from '../../src/screens/ThreadScreen';
 import { UserScreen } from '../../src/screens/UserScreen';
@@ -59,7 +62,7 @@ const RouteView = memo(function RouteView({ route }: { route: Route }) {
     case 'new-file':
       return <NewFileScreen dir={route.dir} refName={route.ref} repo={route.repo} />;
     case 'new-repo':
-      return <NewRepoScreen />;
+      return <NewRepoScreen description={route.description} idea={route.idea} name={route.name} />;
     case 'new-gist':
       return <NewGistScreen />;
     case 'user':
@@ -82,6 +85,10 @@ const RouteView = memo(function RouteView({ route }: { route: Route }) {
       return <BriefPage />;
     case 'people':
       return <PeoplePage />;
+    case 'inbox':
+      return <InboxPage />;
+    case 'service':
+      return <ServiceScreen id={route.id} name={route.name} />;
     case 'add-account':
       return null;
   }
@@ -119,9 +126,12 @@ function routeKey(route: Route): string {
     case 'assigned':
     case 'brief':
     case 'people':
+    case 'inbox':
       return route.kind;
     case 'share':
       return `share:${route.card}`;
+    case 'service':
+      return `service:${route.id}`;
   }
 }
 
@@ -188,15 +198,11 @@ export default function TabsLayout() {
           {expired ? 'that token expired or was revoked' : 'could not reach github'}
         </Body>
         {expired ? (
-          <Pressable accessibilityRole="button" onPress={session.disconnect}>
-            <Label style={styles.reset}>start over</Label>
-          </Pressable>
+          <IconPill icon="restart" label="start over" onPress={session.disconnect} />
         ) : (
           // No signal and nothing saved yet is not a reason to forget the
           // token; it is a reason to try again.
-          <Pressable accessibilityRole="button" onPress={contributions.reload}>
-            <Label style={styles.reset}>try again</Label>
-          </Pressable>
+          <IconPill icon="refresh" label="try again" onPress={contributions.reload} />
         )}
       </View>
     );
@@ -236,7 +242,7 @@ export default function TabsLayout() {
           <NativeTabs.Trigger key={section.key} name={section.route}>
             <NativeTabs.Trigger.Label>{section.key}</NativeTabs.Trigger.Label>
             <NativeTabs.Trigger.Icon md={section.md} sf={section.sf} />
-            {section.key === 'inbox' && session.wanting > 0 ? (
+            {section.key === 'work' && session.wanting > 0 ? (
               <NativeTabs.Trigger.Badge>
                 {session.wanting > 99 ? '99+' : String(session.wanting)}
               </NativeTabs.Trigger.Badge>
@@ -296,10 +302,6 @@ const styles = themed(() =>
     errorText: {
       color: colors.no,
       textAlign: 'center',
-    },
-    reset: {
-      color: colors.ink,
-      textDecorationLine: 'underline',
     },
   }),
 );

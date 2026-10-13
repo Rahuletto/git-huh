@@ -85,6 +85,7 @@ export function CardsScreen({
       <ScreenHead
         action={{
           label: 'search github',
+          icon: 'search',
           hint: 'search repositories, issues, pull requests and people',
           onPress: () => nav.open({ kind: 'search' }),
         }}
@@ -180,8 +181,9 @@ function RepoCard({
         <Svg height={26} width={26}>
           <Sigil seed={seed} size={26} />
         </Svg>
-        <Data style={styles.handle}>
-          ~{repo.owner.toLowerCase()}-{repo.name.toLowerCase()}
+        <Data numberOfLines={1} style={styles.handle}>
+          {repo.owner.toLowerCase() === nav.login?.toLowerCase() ? '' : `${repo.owner.toLowerCase()}/`}
+          {repo.name.toLowerCase()}
         </Data>
         <Data style={styles.headCount}>
           {sampled ? `${fmt(total)} in ${MONTHS}mo` : 'not in the sample'}

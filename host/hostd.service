@@ -1,0 +1,18 @@
+# systemd user service for hostd. Install:
+#   mkdir -p ~/.config/systemd/user ~/.config/hostd
+#   cp config.example.json ~/.config/hostd/config.json   # then edit it
+#   cp hostd.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload && systemctl --user enable --now hostd
+# The path below assumes the repository is at ~/git-huh; change it to yours.
+[Unit]
+Description=hostd: services, logs and panels for git-huh's host section
+After=network-online.target
+
+[Service]
+ExecStart=/usr/bin/python3 %h/git-huh/host/hostd.py
+Restart=always
+RestartSec=10
+Nice=10
+
+[Install]
+WantedBy=default.target

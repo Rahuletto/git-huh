@@ -2,7 +2,7 @@ import type { AndroidSymbol } from 'expo-symbols';
 import type { SFSymbol } from 'sf-symbols-typescript';
 
 export interface Section {
-  key: 'today' | 'inbox' | 'work' | 'year' | 'ideas';
+  key: 'today' | 'work' | 'year' | 'ideas' | 'host';
   /** The route file under `app/(tabs)/` — `index` is the first tab. */
   route: string;
   /** iOS SF Symbol, outline and filled. */
@@ -15,10 +15,11 @@ export interface Section {
  * Five sections, and every screen belongs to exactly one.
  *
  * Thirteen equal pages behind a scrolling rail make the answer to "where is
- * the thing I want" "swipe until it turns up". These are the four questions
- * the screens actually answer — what today
- * looks like, what wants me, what I am shipping, what the year was — plus
- * `ideas`, a device-local notebook for projects to build next.
+ * the thing I want" "swipe until it turns up". These are the questions the
+ * screens actually answer — what today looks like, what wants me and what I
+ * am shipping (one page, `work`: the inbox is the top of it), what the year
+ * was — plus `ideas`, a device-local notebook for projects to build next,
+ * and `host`, the machine those projects run on.
  *
  * The grouping, the count and the shape all follow Apple's guidance: a flat
  * bar of persistent, labelled destinations (three to five), content and not
@@ -33,12 +34,6 @@ export const SECTIONS: readonly Section[] = [
     route: 'index',
     sf: { default: 'sun.max', selected: 'sun.max.fill' },
     md: 'light_mode',
-  },
-  {
-    key: 'inbox',
-    route: 'inbox',
-    sf: { default: 'tray', selected: 'tray.fill' },
-    md: 'inbox',
   },
   {
     key: 'work',
@@ -57,6 +52,12 @@ export const SECTIONS: readonly Section[] = [
     route: 'ideas',
     sf: { default: 'lightbulb', selected: 'lightbulb.fill' },
     md: 'lightbulb',
+  },
+  {
+    key: 'host',
+    route: 'host',
+    sf: { default: 'server.rack', selected: 'server.rack' },
+    md: 'dns',
   },
 ];
 

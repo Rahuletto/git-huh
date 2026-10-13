@@ -12,6 +12,7 @@ import {
 import { CommentTools, type Verb } from '../components/CommentTools';
 import { Composer } from '../components/Composer';
 import { Details } from '../components/Details';
+import { IconButton, IconPill } from '../components/Icon';
 import { Markdown } from '../components/Markdown';
 import { OverlayFrame, SavedNote } from '../components/Overlay';
 import { Reactions } from '../components/Reactions';
@@ -83,6 +84,9 @@ export function ThreadScreen({
 
   const thread = state.status === 'ready' ? state.data : null;
   const kind = type === 'issue' ? 'issues' : 'discussions';
+  const [editing, setEditing] = useState(false);
+  const openOnGitHub = () =>
+    Linking.openURL(`https://github.com/${repo}/${kind}/${number}`).catch(() => {});
 
   return (
     <OverlayFrame onBack={nav.close} where={`${repo} ${type === 'issue' ? '#' : '§'}${number}`}>
@@ -96,14 +100,7 @@ export function ThreadScreen({
               ? `this token cannot read ${type === 'discussion' ? 'discussions · it needs read:discussion' : 'this issue'}`
               : `could not open this ${type}`}
           </Body>
-          <Pressable
-            accessibilityRole="link"
-            onPress={() =>
-              Linking.openURL(`https://github.com/${repo}/${kind}/${number}`).catch(() => {})
-            }
-          >
-            <Label style={styles.underline}>open it on github</Label>
-          </Pressable>
+          <IconPill icon="external" label="open it on github" onPress={openOnGitHub} />
         </View>
       )}
 
@@ -114,16 +111,29 @@ export function ThreadScreen({
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.titleRow}>
-            <StateChip
-              text={thread.state.toLowerCase()}
-              tone={
-                thread.state === 'CLOSED'
-                  ? colors.ink40
-                  : thread.state === 'ANSWERED'
-                    ? colors.yes
-                    : colors.ink
-              }
-            />
+            <View style={styles.titleTop}>
+              <StateChip
+                text={thread.state.toLowerCase()}
+                tone={
+                  thread.state === 'CLOSED'
+                    ? colors.ink40
+                    : thread.state === 'ANSWERED'
+                      ? colors.yes
+                      : colors.ink
+                }
+              />
+              <View style={styles.titleTools}>
+                {thread.canUpdate && (
+                  <IconButton
+                    icon={editing ? 'close' : 'edit'}
+                    label={editing ? 'close the editor' : `edit the title and ${type === 'issue' ? 'description' : 'post'}`}
+                    on={editing}
+                    onPress={() => setEditing(!editing)}
+                  />
+                )}
+                <IconButton icon="external" label="open it on github" onPress={openOnGitHub} />
+              </View>
+            </View>
             <Heading style={styles.title}>{thread.title}</Heading>
           </View>
 
@@ -186,11 +196,20 @@ export function ThreadScreen({
               number={number}
               onChanged={state.reload}
               pinned={thread.pinned}
+              onTextClose={() => setEditing(false)}
               repo={repo}
+              textOpen={editing}
               title={thread.title}
             />
           ) : (
-            thread.canUpdate && <DiscussionEditor onChanged={state.reload} thread={thread} />
+            thread.canUpdate &&
+            editing && (
+              <DiscussionEditor
+                onChanged={state.reload}
+                onClose={() => setEditing(false)}
+                thread={thread}
+              />
+            )
           )}
 
           {thread.comments.length > 0 && <View style={styles.gap} />}
@@ -272,21 +291,21 @@ export function ThreadScreen({
             actions={
               type === 'issue'
                 ? [
-                    { key: 'comment', label: 'comment', primary: true },
+                    { key: 'comment', label: 'comment', primary: true, icon: 'send' as const },
                     ...(thread.state === 'CLOSED'
-                      ? [{ key: 'reopen', label: 'reopen', allowEmpty: true }]
+                      ? [{ key: 'reopen', label: 'reopen', allowEmpty: true, icon: 'reopen' as const }]
                       : [
-                          { key: 'close', label: 'close as done', allowEmpty: true },
-                          { key: 'not-planned', label: 'close as not planned', allowEmpty: true },
+                          { key: 'close', label: 'done', allowEmpty: true, icon: 'done' as const },
+                          { key: 'not-planned', label: 'not planned', allowEmpty: true, icon: 'notPlanned' as const },
                         ]),
                   ]
                 : [
-                    { key: 'reply', label: 'reply', primary: true },
+                    { key: 'reply', label: 'reply', primary: true, icon: 'send' as const },
                     ...(thread.canUpdate
                       ? [
                           thread.closed
-                            ? { key: 'reopen', label: 'reopen', allowEmpty: true }
-                            : { key: 'close', label: 'close discussion', allowEmpty: true },
+                            ? { key: 'reopen', label: 'reopen', allowEmpty: true, icon: 'reopen' as const }
+                            : { key: 'close', label: 'close', allowEmpty: true, icon: 'done' as const },
                         ]
                       : []),
                   ]
@@ -357,39 +376,31 @@ function discussionVerbs(
 }
 
 /** A discussion's title and opening post, edited in place. */
-function DiscussionEditor({ thread, onChanged }: { thread: Thread; onChanged: () => void }) {
+function DiscussionEditor({
+  thread,
+  onChanged,
+  onClose,
+}: {
+  thread: Thread;
+  onChanged: () => void;
+  onClose: () => void;
+}) {
   const nav = useNav();
-  const [open, setOpen] = useState(false);
   const [title, setTitle] = useState(thread.title);
 
-  if (!open) {
-    return (
-      <Pressable
-        accessibilityRole="button"
-        hitSlop={6}
-        onPress={() => {
-          setTitle(thread.title);
-          setOpen(true);
-        }}
-        style={styles.editLink}
-      >
-        <Label style={styles.underline}>edit the title and post</Label>
-      </Pressable>
-    );
-  }
   return (
     <View>
       <TextInput onChangeText={setTitle} style={styles.titleInput} value={title} />
       <Composer
-        actions={[{ key: 'save', label: 'save', primary: true }]}
+        actions={[{ key: 'save', label: 'save', primary: true, icon: 'save' }]}
         compact
         demo={nav.demo}
         doing="that edit"
         initial={thread.body}
-        onCancel={() => setOpen(false)}
+        onCancel={onClose}
         onSubmit={async (_, text) => {
           await editDiscussion(nav.token ?? '', thread.id, { title: title.trim() || thread.title, body: text });
-          setOpen(false);
+          onClose();
           onChanged();
           return 'saved';
         }}
@@ -412,6 +423,15 @@ const styles = themed(() =>
       gap: 10,
       marginBottom: 4,
       padding: space.card,
+    },
+    titleTop: {
+      alignItems: 'center',
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+    },
+    titleTools: {
+      flexDirection: 'row',
+      gap: 8,
     },
     title: {
       fontSize: 16,
@@ -442,9 +462,6 @@ const styles = themed(() =>
     bodyTools: {
       gap: 4,
       marginTop: 12,
-    },
-    editLink: {
-      marginTop: 18,
     },
     titleInput: {
       backgroundColor: colors.card,
@@ -480,10 +497,6 @@ const styles = themed(() =>
     error: {
       color: colors.no,
       textAlign: 'center',
-    },
-    underline: {
-      color: colors.ink,
-      textDecorationLine: 'underline',
     },
   }),
 );

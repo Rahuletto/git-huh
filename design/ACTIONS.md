@@ -7,6 +7,10 @@ added or removed changes this file in the same commit.
 **yes** means it works in the app. **link** means the app opens the page on
 github.com. **no** means it is left out on purpose, with the reason.
 
+The `host` section's actions (restart, stop, a service's own verbs) are not
+GitHub's and are not listed here: they are whatever `host/hostd.py`'s config
+allows, and `host/README.md` documents them.
+
 Every write goes through `Composer` (`src/components/Composer.tsx`). The
 functions behind them are in `src/lib/writes.ts`, plus `src/lib/checks.ts` for
 Actions. Each one was checked against GitHub's live GraphQL schema when it was
@@ -25,10 +29,10 @@ added.
 | dismiss a review | yes | under an approving or blocking review, for people who can push |
 | react to the pull request or any comment | yes | `react`; reactions are words (`+1`, `heart`), not emoji |
 | edit · delete your own comment | yes | `edit` / `delete` under it (delete is pressed twice) |
-| edit title and description | yes | brief → details → `edit the title and description` |
-| labels · assignees · reviewers · milestone | yes | brief → details → `change` |
+| edit title and description | yes | brief → details → `edit title and description` (pencil) |
+| labels · assignees · reviewers · milestone | yes | brief → details → the pencil on each row |
 | assign yourself | yes | brief → details → `assign me` |
-| lock · unlock the conversation | yes | brief → details |
+| lock · unlock the conversation | yes | brief → details → `lock` (pressed twice) |
 | merge · squash · rebase | yes | talk → merge box; only the methods the repository allows; pressed twice; pinned to the head you looked at |
 | merge when ready (auto-merge) · cancel it | yes | merge box, when the repository allows it |
 | update branch | yes | merge box, when it is behind |
@@ -51,10 +55,10 @@ added.
 | read, comment | yes | `thread` |
 | close as done · close as not planned · reopen | yes | the composer at the end |
 | react, edit or delete your comments | yes | under each comment |
-| edit title and body | yes | details → `edit the title and description` |
+| edit title and body | yes | the pencil on the title card |
 | labels · assignees · milestone · assign yourself | yes | details |
-| lock · unlock | yes | details |
-| pin · unpin to the repository | yes | details |
+| lock · unlock | yes | details → `lock` (pressed twice) |
+| pin · unpin to the repository | yes | details → `pin` |
 | open a new issue, templates and forms included | yes | repository → `issues` → `new issue` |
 | list open and closed | yes | repository → `issues` |
 | transfer to another repository | no | an admin action, rare on a phone |
@@ -70,7 +74,7 @@ added.
 | vote up the discussion or a reply | yes | `▲ n` |
 | mark · unmark as the answer | yes | under a reply, in a Q&A category |
 | react, edit or delete your replies | yes | under each reply |
-| edit the title and post | yes | `edit the title and post` |
+| edit the title and post | yes | the pencil on the title card |
 | close · reopen | yes | the composer at the end |
 | start a discussion | yes | repository → `discussions` → `new discussion` |
 | polls, convert to an issue | no | rare, and polls cannot be created through the API |
@@ -83,8 +87,8 @@ added.
 | star · unstar | yes | under the repository's name |
 | watch · ignore · back to participating | yes | under the name (REST, so `repo` scope is enough) |
 | fork | yes | under the name, on repositories that are not yours; pressed twice; opens the fork |
-| switch branch · new branch · delete branch | yes | `code` → `branches` |
-| new file | yes | `code` → `new file here` (commits to the branch you are on) |
+| switch branch · new branch · delete branch | yes | `code` → the branch pill |
+| new file | yes | `code` → `+` beside the path (commits to the branch you are on) |
 | edit a file (commit, or branch and pull request) | yes | a file → `edit` |
 | delete a file | yes | a file → `delete`, for people who can push; pressed twice |
 | list pull requests, open and closed | yes | `pulls` |
@@ -94,7 +98,7 @@ added.
 | Actions: re-run · re-run failed · cancel · approve a held run | yes | `actions` → latest runs |
 | Actions: full logs | link | `logs on github`; the end of a failing job's log is in a pull request's `checks` |
 | Dependabot alerts: read · dismiss with a reason | yes | `security` |
-| create a repository | yes | the account page → `new repository`, or your profile |
+| create a repository | yes | the account page → `new repository`, your profile, or an idea → `make a repository` (named after it and linked back) |
 | settings, collaborators, branch protection, webhooks, secrets | no | settings stay on the website; nobody asked for them on a phone (`STORIES.md` §4) |
 | delete · archive · rename · transfer a repository | no | permanent, and admin-only; needs a scope (`delete_repo`) the app should not hold |
 | wiki · projects · Pages · packages · codespaces | link | they open on github.com |
@@ -127,7 +131,7 @@ added.
 
 | action | | where |
 |---|---|---|
-| repositories · issues · pull requests · people, with the site's qualifiers | yes | `search github` on the `repos` block, or the account page |
+| repositories · issues · pull requests · people, with the site's qualifiers | yes | the search glyph on the `repos` block, or the account page |
 | code, across your repositories or inside one | yes | `repos` block; repository → `code` |
 | commits, topics, discussions, packages | no | not yet |
 

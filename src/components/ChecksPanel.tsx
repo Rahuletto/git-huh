@@ -18,6 +18,7 @@ import { demoChecks, demoLog, demoPending } from '../lib/demo';
 import { useNav } from '../lib/nav';
 import { explain } from '../lib/rest';
 import { colors, fonts, radii, themed } from '../theme';
+import { Icon } from './Icon';
 import { Data, Label, Micro } from './Type';
 
 const TONE = themed<Record<CheckTone, string>>(() => ({
@@ -238,7 +239,12 @@ function Run({ repo, run }: { repo: string; run: CheckRun }) {
               {run.summary}
             </Micro>
           ) : null}
-          {canOpen && <Micro style={styles.more}>{open ? 'hide the log' : 'why · show the end of the log'}</Micro>}
+          {canOpen && (
+            <View style={styles.moreRow}>
+              <Icon color={colors.ink70} name={open ? 'collapse' : 'expand'} size={14} />
+              <Micro style={styles.more}>{open ? 'hide the log' : 'why · the end of the log'}</Micro>
+            </View>
+          )}
         </View>
       </Pressable>
       {open && <Log jobId={run.id} repo={repo} url={run.url} />}
@@ -351,9 +357,14 @@ const styles = themed(() =>
     summary: {
       color: colors.ink70,
     },
+    moreRow: {
+      alignItems: 'center',
+      flexDirection: 'row',
+      gap: 4,
+      marginTop: 4,
+    },
     more: {
-      color: colors.ink,
-      textDecorationLine: 'underline',
+      color: colors.ink70,
     },
     log: {
       backgroundColor: colors.recess,

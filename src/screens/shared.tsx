@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
+import { IconButton, type Glyph } from '../components/Icon';
 import { Label } from '../components/Type';
 import type { GitHubModel } from '../lib/contributions';
 import { GitHubError } from '../lib/github';
@@ -13,7 +14,7 @@ import { colors, radii, space, themed } from '../theme';
  * block from the next.
  *
  * `action` is the one thing the block can do — `share` on a chart — and sits
- * after the figure as a small pill, because pills are actions.
+ * after the figure as a round glyph button, the way a phone draws share.
  */
 export function ScreenHead({
   left,
@@ -22,7 +23,7 @@ export function ScreenHead({
 }: {
   left: string;
   right?: string;
-  action?: { label: string; hint: string; onPress: () => void };
+  action?: { label: string; hint: string; onPress: () => void; icon?: Glyph };
 }) {
   return (
     <View style={styles.head}>
@@ -35,16 +36,39 @@ export function ScreenHead({
   );
 }
 
-/** A small outlined pill that does one thing — `share`, `change`. */
+/** What each head action is drawn as, when it does not say. */
+const ACTION_GLYPHS: Record<string, Glyph> = {
+  share: 'share',
+  change: 'settings',
+  edit: 'edit',
+};
+
+/**
+ * The one thing a block can do — `share`, `change` — as a round glyph
+ * button. The word stays as its accessibility label.
+ */
 export function ActionPill({
   label,
   hint,
   onPress,
+  icon,
 }: {
   label: string;
   hint: string;
   onPress: () => void;
+  icon?: Glyph;
 }) {
+  const glyph = icon ?? ACTION_GLYPHS[label];
+  if (glyph) {
+    return (
+      <IconButton
+        icon={glyph}
+        label={`${label} · ${hint}`}
+        onPress={onPress}
+        size={30}
+      />
+    );
+  }
   return (
     <Pressable
       accessibilityHint={hint}

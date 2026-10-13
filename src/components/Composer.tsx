@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { explain } from '../lib/rest';
 import { colors, fonts, radii, themed } from '../theme';
+import { Icon, type Glyph } from './Icon';
 import { Label, Micro } from './Type';
 
 export interface ComposerAction {
@@ -21,6 +22,8 @@ export interface ComposerAction {
   on?: boolean;
   /** Not available right now, for a reason the screen says nearby. */
   disabled?: boolean;
+  /** A glyph before the verb, so a row of verbs reads at a glance. */
+  icon?: Glyph;
 }
 
 type Phase =
@@ -131,8 +134,19 @@ export function Composer({
               key={action.key}
               onPress={() => send(action)}
               // Border and fill change together: see the corner-radius trap.
-              style={[styles.pill, filled && styles.primary, disabled && styles.disabled]}
+              style={[
+                styles.pill,
+                filled && styles.primary,
+                disabled && (filled ? styles.primaryDisabled : styles.disabled),
+              ]}
             >
+              {action.icon && !(busy && phase.action === action.key) ? (
+                <Icon
+                  color={filled ? colors.onBlack : colors.ink}
+                  name={armed ? 'save' : action.icon}
+                  size={14}
+                />
+              ) : null}
               <Label style={filled ? styles.primaryLabel : styles.label}>
                 {busy && phase.action === action.key
                   ? 'sending…'
@@ -145,6 +159,7 @@ export function Composer({
         })}
         {onCancel && (
           <Pressable accessibilityRole="button" disabled={busy} onPress={onCancel} style={styles.pill}>
+            <Icon name="close" size={14} />
             <Label style={styles.label}>cancel</Label>
           </Pressable>
         )}
@@ -196,9 +211,12 @@ const styles = themed(() =>
       gap: 8,
     },
     pill: {
-      borderColor: colors.hair,
+      alignItems: 'center',
+      borderColor: colors.hairStrong,
       borderRadius: radii.pill,
       borderWidth: 1,
+      flexDirection: 'row',
+      gap: 6,
       paddingHorizontal: 14,
       paddingVertical: 8,
     },
@@ -208,6 +226,11 @@ const styles = themed(() =>
     },
     disabled: {
       opacity: 0.4,
+    },
+    // A primary verb waiting for words stays the black pill, quieter, rather
+    // than turning into a grey blob that reads as a different control.
+    primaryDisabled: {
+      opacity: 0.55,
     },
     label: {
       color: colors.ink,

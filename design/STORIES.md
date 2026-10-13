@@ -53,7 +53,7 @@ one keeps those endings inside.
    other people's repositories. → `you`. And to post it without cropping a
    screenshot: `share`, top right on any chart, makes it a 4:3 image.
 
-### inbox — *what wants me*
+### inbox — *what wants me* (the top of `work`)
 
 6. **I want the two things addressed to me**, not forty repository events. The
    filter chips carry counts so the tab tells you whether it is worth opening.
@@ -114,6 +114,14 @@ one keeps those endings inside.
     year's own calendar rather than a twelve-bar summary. → `years`.
 20a. **I want to see who I actually worked with** — who reviewed me, whom I
     reviewed, and whether it was give or take. → `people`.
+
+### host — *is my machine alright*
+
+    My machine runs a few things I care about: a website, a watcher, a
+    bridge. On the bus I want to know they are up and answering, see what
+    one has been saying in its log, and restart the one that is stuck,
+    without a laptop or an SSH app. → `host`, served by `host/hostd.py` over
+    the tailnet; what is shown is whatever its JSON config says.
 
 ### ideas — *what to build next*
 
@@ -313,7 +321,7 @@ GitHub's own notifications list, which needs a scope the app does not ask for.
 Nobody asks for a dashboard. Nobody asks for another feed of other people's
 repositories. The complaints are all about **being interrupted well** and
 **being able to read**, and everything in this app's navigation follows from
-that: `inbox` before `work`, `work` before `year`, and the year — the part
+that: the inbox first, at the top of `work`, `work` before `year`, and the year — the part
 this app is actually good at — behind them both, where it is a pleasure
 rather than an obligation.
 
@@ -327,11 +335,13 @@ already are, and nothing tells you what is on the other side.
 
 What replaced it is in `DESIGN.md` § Navigation — five sections, a bar that
 is always visible, and each section one page. The stories above are the
-argument for the grouping: story 6 is why `inbox` is a destination and not a
+argument for the grouping: story 6 is why the inbox is a destination and not a
 paragraph under a greeting, and 9a–9c are why the queue and the assignments
-open the inbox's page rather than sit in `work` — they are things waiting on
-you, not things you are shipping; stories 10–16 are why `pulls`, `brief`,
-`cycle` and `repos` are one place; stories 17–20a are why the whole
+sit at the top of it — they are things waiting on you, not things you are
+shipping; stories 10–16 are why `pulls`, `brief`, `cycle` and `repos` are one
+place. The inbox was a section of its own until `host` needed the fifth slot;
+it is now the top of `work`, above `pulls`, because what wants you is how a
+working day starts, the tab carries its count, and a sixth tab is ruled out; stories 17–20a are why the whole
 retrospective is one tab you can ignore on a Tuesday.
 
 For a while each section was a segmented control of its views over a

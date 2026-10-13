@@ -130,10 +130,11 @@ export function ReviewScreen({
             })}
           </Card>
 
-          <Label style={styles.legend}>
-            dots · open to merge &nbsp;·&nbsp; ring · first review &nbsp;·&nbsp;
-            dashed · median
-          </Label>
+          <View style={styles.legend}>
+            {['dots · open to merge', 'ring · first review', 'dashed · median'].map((item) => (
+              <Label key={item}>{item}</Label>
+            ))}
+          </View>
         </>
       )}
     </Block>
@@ -192,8 +193,11 @@ const styles = themed(() =>
       width: TOOK_WIDTH,
     },
     legend: {
-      lineHeight: 16,
+      columnGap: 16,
+      flexDirection: 'row',
+      flexWrap: 'wrap',
       paddingHorizontal: 4,
+      rowGap: 2,
     },
     note: {
       paddingVertical: 12,

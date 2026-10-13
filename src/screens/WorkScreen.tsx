@@ -2,6 +2,7 @@ import { memo, useCallback } from 'react';
 
 import { useSession } from '../shell/session';
 import { BriefTile } from './BriefScreen';
+import { InboxBlocks } from './InboxScreen';
 import { CardsScreen } from './CardsScreen';
 import { IndexScreen } from './IndexScreen';
 import { ReviewScreen } from './ReviewScreen';
@@ -13,8 +14,11 @@ const Cycle = memo(ReviewScreen);
 const Repos = memo(CardsScreen);
 
 /**
- * `work` — what am I shipping — as one page:
+ * `work` — what wants me, and what am I shipping — as one page:
  *
+ * 0. what wants you and the inbox: the review queue, what is assigned to
+ *    you, and the head of the feed (`InboxBlocks`). This was its own
+ *    section; it is the start of the working day, so it opens `work`.
  * 1. `pulls`: your open pull requests, filed by repository.
  * 2. `the brief`: the newest description, and the reader that pages
  *    through the rest one after another.
@@ -35,6 +39,7 @@ export function WorkScreen() {
 
   return (
     <Page blocks>
+      <InboxBlocks />
       <Pulls onOpen={openPull} state={prs} />
       <Brief activity={activity} loading={loading} />
       <Cycle activity={activity} loading={loading} />

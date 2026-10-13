@@ -9,6 +9,8 @@ import { demoRepoInfo } from '../lib/demo';
 import { eventually } from '../lib/eventually';
 import { listBranches, listCategories } from '../lib/explore';
 import { GitHubError } from '../lib/github';
+import { update } from '../lib/ideas';
+import { ideasStore } from '../lib/ideasStorage';
 import { useNav } from '../lib/nav';
 import { fetchRepoInfo, listReleases } from '../lib/repo';
 import {
@@ -309,10 +311,19 @@ export function NewDiscussionScreen({ repo }: { repo: string }) {
 
 // --- a repository ----------------------------------------------------------------
 
-export function NewRepoScreen() {
+export function NewRepoScreen({
+  name: initialName = '',
+  description: initialDescription = '',
+  idea,
+}: {
+  name?: string;
+  description?: string;
+  /** The idea this repository is made from: linked to it once it exists. */
+  idea?: string;
+} = {}) {
   const nav = useNav();
-  const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
+  const [name, setName] = useState(initialName);
+  const [description, setDescription] = useState(initialDescription);
   const [isPrivate, setPrivate] = useState(true);
   const [readme, setReadme] = useState(true);
   const clean = name.trim().replace(/\s+/g, '-');
@@ -338,6 +349,17 @@ export function NewRepoScreen() {
             private: isPrivate,
             readme,
           });
+          if (idea) {
+            // The notebook is the idea's own; a failure to link it is said, not thrown.
+            const store = ideasStore(nav.demo);
+            try {
+              const ideas = await store.load();
+              await store.save(update(ideas, idea, () => ({ repo: made, stage: 'building' }), Date.now()));
+            } catch {
+              nav.replace({ kind: 'repo', repo: made });
+              return `made ${made} · could not link it to the idea`;
+            }
+          }
           nav.replace({ kind: 'repo', repo: made });
           return `made ${made}`;
         }}

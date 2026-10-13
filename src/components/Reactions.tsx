@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
 import { useNav } from '../lib/nav';
 import {
@@ -10,9 +10,9 @@ import {
   type ReactionContent,
 } from '../lib/reactions';
 import { setReaction } from '../lib/writes';
-import { colors, radii, themed } from '../theme';
+import { themed } from '../theme';
 import { Composer } from './Composer';
-import { Label } from './Type';
+import { IconButton } from './Icon';
 
 /**
  * The reactions under something said, as words with their counts: `+1 3`,
@@ -70,15 +70,13 @@ export function Reactions({
           />
         </View>
       )}
-      <Pressable
-        accessibilityLabel={picking ? 'close the reactions' : 'add a reaction'}
-        accessibilityRole="button"
-        hitSlop={6}
+      <IconButton
+        icon={picking ? 'close' : 'react'}
+        label={picking ? 'close the reactions' : 'add a reaction'}
+        on={picking}
         onPress={() => setPicking((value) => !value)}
-        style={styles.react}
-      >
-        <Label style={styles.reactLabel}>{picking ? '×' : 'react'}</Label>
-      </Pressable>
+        size={30}
+      />
     </View>
   );
 }
@@ -93,17 +91,6 @@ const styles = themed(() =>
     grow: {
       flexShrink: 1,
       marginTop: -10,
-    },
-    react: {
-      borderColor: colors.hair,
-      borderRadius: radii.pill,
-      borderStyle: 'dashed',
-      borderWidth: 1,
-      paddingHorizontal: 12,
-      paddingVertical: 7,
-    },
-    reactLabel: {
-      color: colors.ink40,
     },
   }),
 );

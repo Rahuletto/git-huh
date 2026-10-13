@@ -3,6 +3,7 @@ import { Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { Avatar } from '../components/Avatar';
 import { Composer } from '../components/Composer';
+import { IconPill } from '../components/Icon';
 import { OverlayFrame, SavedNote } from '../components/Overlay';
 import { Body, Data, Heading, Label, Micro } from '../components/Type';
 import { useRemote } from '../hooks/useRemote';
@@ -89,15 +90,15 @@ export function UserScreen({ login }: { login: string }) {
             <Data style={styles.fact}>on github {ago(profile.createdAt)}</Data>
           </View>
           {profile.website ? (
-            <Pressable
-              accessibilityRole="link"
+            <IconPill
+              dim
+              icon="link"
+              label={profile.website.replace(/^https?:\/\//, '')}
               onPress={() => {
                 const url = /^https?:/.test(profile.website) ? profile.website : `https://${profile.website}`;
                 Linking.openURL(url).catch(() => {});
               }}
-            >
-              <Label style={styles.link}>{profile.website}</Label>
-            </Pressable>
+            />
           ) : null}
 
           {profile.viewerIsFollowing !== null && !profile.isViewer && (
@@ -122,26 +123,20 @@ export function UserScreen({ login }: { login: string }) {
 
           <View style={styles.links}>
             {!profile.isOrganization && (
-              <Pressable
-                accessibilityRole="button"
+              <IconPill
+                icon="gist"
+                label={profile.isViewer ? 'your gists' : 'gists'}
                 onPress={() => nav.open({ kind: 'gists', login: profile.isViewer ? undefined : profile.login })}
-              >
-                <Label style={styles.link}>{profile.isViewer ? 'your gists' : 'gists'}</Label>
-              </Pressable>
+              />
             )}
             {profile.isViewer && (
-              <Pressable accessibilityRole="button" onPress={() => nav.open({ kind: 'new-repo' })}>
-                <Label style={styles.link}>new repository</Label>
-              </Pressable>
+              <IconPill icon="repo" label="new repository" onPress={() => nav.open({ kind: 'new-repo' })} />
             )}
-            <Pressable
-              accessibilityRole="button"
+            <IconPill
+              icon="search"
+              label={profile.isViewer ? 'search your repositories' : 'search their repositories'}
               onPress={() => nav.open({ kind: 'search', query: `user:${profile.login}` })}
-            >
-              <Label style={styles.link}>
-                {profile.isViewer ? 'search your repositories' : 'search their repositories'}
-              </Label>
-            </Pressable>
+            />
           </View>
 
           <Label style={styles.section}>repositories · recently pushed</Label>
@@ -218,7 +213,6 @@ const styles = themed(() =>
     },
     link: {
       color: colors.ink70,
-      textDecorationLine: 'underline',
     },
     section: {
       color: colors.ink,

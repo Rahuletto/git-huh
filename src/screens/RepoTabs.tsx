@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Linking, Pressable, StyleSheet, View } from 'react-native';
 
+import { IconPill } from '../components/Icon';
 import { Composer, type ComposerAction } from '../components/Composer';
 import { StateChip } from '../components/StateChip';
 import { Body, Data, Label, Micro } from '../components/Type';
@@ -147,23 +148,18 @@ export function Branches({
   return (
     <View style={styles.branches}>
       <View style={styles.branchRow}>
-        <Data style={styles.branchName}>on {branch || 'the default branch'}</Data>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityState={{ expanded: open }}
-          hitSlop={6}
+        <IconPill
+          icon={open ? 'close' : 'branch'}
+          label={branch || 'default branch'}
+          on={open}
           onPress={() => setOpen(!open)}
-        >
-          <Label style={styles.link}>{open ? 'close' : 'branches'}</Label>
-        </Pressable>
+        />
         {!isDefault && (
-          <Pressable
-            accessibilityRole="button"
-            hitSlop={6}
+          <IconPill
+            icon="pull"
+            label="pull request"
             onPress={() => nav.open({ kind: 'new-pull', repo, head: branch })}
-          >
-            <Label style={styles.link}>pull request</Label>
-          </Pressable>
+          />
         )}
       </View>
 
@@ -295,14 +291,12 @@ export function Actions({ repo, info }: { repo: string; info: RepoInfo | null })
             <View style={styles.rowTop}>
               <Data style={styles.number}>{workflow.name}</Data>
               {canWrite && workflow.state === 'active' && (
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityState={{ expanded: running === workflow.id }}
-                  hitSlop={6}
+                <IconPill
+                  icon={running === workflow.id ? 'close' : 'play'}
+                  label={running === workflow.id ? 'close' : 'run'}
+                  on={running === workflow.id}
                   onPress={() => setRunning(running === workflow.id ? null : workflow.id)}
-                >
-                  <Label style={styles.link}>{running === workflow.id ? 'close' : 'run'}</Label>
-                </Pressable>
+                />
               )}
             </View>
             <Micro style={styles.by}>
@@ -418,9 +412,12 @@ function RunRow({
       </Micro>
       <View style={styles.runFoot}>
         {run.url !== '#' && (
-          <Pressable accessibilityRole="link" hitSlop={6} onPress={() => Linking.openURL(run.url).catch(() => {})}>
-            <Label style={styles.link}>logs on github</Label>
-          </Pressable>
+          <IconPill
+            dim
+            icon="log"
+            label="logs on github"
+            onPress={() => Linking.openURL(run.url).catch(() => {})}
+          />
         )}
       </View>
       {verbs.length > 0 && (
@@ -486,10 +483,6 @@ const styles = themed(() =>
     },
     by: {
       color: colors.ink40,
-    },
-    link: {
-      color: colors.ink70,
-      textDecorationLine: 'underline',
     },
     branches: {
       marginTop: 12,

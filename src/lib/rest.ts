@@ -122,5 +122,7 @@ export function explain(error: unknown, doing = 'that'): string {
         return error.message.toLowerCase().replace(/\.$/, '');
     }
   }
+  // Words already meant for the screen — what the host said went wrong.
+  if (error instanceof Error && (error as { spoken?: boolean }).spoken) return error.message;
   return `${doing} did not go through`;
 }

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { StyleSheet, TextInput, View } from 'react-native';
 
 import { listAssignable, listLabels, listMilestones } from '../lib/explore';
 import { useNav } from '../lib/nav';
@@ -14,6 +14,7 @@ import {
 } from '../lib/writes';
 import { colors, fonts, radii, themed } from '../theme';
 import { Composer, type ComposerAction } from './Composer';
+import { IconButton, IconPill } from './Icon';
 import { Picker } from './Picker';
 import { Data, Label, Micro } from './Type';
 
@@ -49,6 +50,8 @@ export function Details({
   pinned,
   canUpdate,
   onChanged,
+  textOpen,
+  onTextClose,
 }: {
   kind: 'issue' | 'pull';
   repo: string;
@@ -66,14 +69,30 @@ export function Details({
   pinned?: boolean;
   canUpdate: boolean;
   onChanged: () => void;
+  /**
+   * The title editor opened from somewhere else — the pencil on the page's
+   * title card. When given, this column draws no edit button of its own.
+   */
+  textOpen?: boolean;
+  onTextClose?: () => void;
 }) {
   const nav = useNav();
   const token = nav.token ?? '';
-  const [editing, setEditing] = useState<Editing>(null);
-  const [draftTitle, setDraftTitle] = useState(title);
+  const [picking, setEditing] = useState<Editing>(null);
+  // Null until typed in, so an editor opened again starts from the saved title.
+  const [typedTitle, setDraftTitle] = useState<string | null>(null);
+  const draftTitle = typedTitle ?? title;
+  const controlled = textOpen !== undefined;
+  // Opened from the title card, the editor wins over any open picker.
+  const editing: Editing = controlled ? (textOpen ? 'text' : picking) : picking;
+  const closeText = () => {
+    setEditing(null);
+    setDraftTitle(null);
+    onTextClose?.();
+  };
 
   const done = (note: string) => {
-    setEditing(null);
+    closeText();
     onChanged();
     return note;
   };
@@ -85,14 +104,16 @@ export function Details({
         {value || '—'}
       </Data>
       {canUpdate && (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityState={{ expanded: editing === name }}
-          hitSlop={6}
-          onPress={() => setEditing(editing === name ? null : name)}
-        >
-          <Label style={styles.change}>{editing === name ? 'close' : 'change'}</Label>
-        </Pressable>
+        <IconButton
+          icon={editing === name ? 'close' : 'edit'}
+          label={editing === name ? `close the ${name}` : `change the ${name}`}
+          on={editing === name}
+          onPress={() => {
+            if (controlled && textOpen) onTextClose?.();
+            setEditing(editing === name ? null : name);
+          }}
+          size={28}
+        />
       )}
     </View>
   );
@@ -103,6 +124,7 @@ export function Details({
           {
             key: 'me',
             label: 'assign me',
+            icon: 'assignMe' as const,
             run: async () => {
               await setAssignees(token, repo, number, assignees, [...assignees, nav.login ?? '']);
               return 'assigned to you';
@@ -114,7 +136,8 @@ export function Details({
       ? [
           {
             key: 'lock',
-            label: locked ? 'unlock' : 'lock conversation',
+            label: locked ? 'unlock' : 'lock',
+            icon: locked ? ('unlock' as const) : ('lock' as const),
             confirm: locked ? undefined : 'lock it?',
             run: async () => {
               await setLocked(token, repo, number, !locked);
@@ -127,7 +150,9 @@ export function Details({
       ? [
           {
             key: 'pin',
-            label: pinned ? 'unpin' : 'pin to the repository',
+            label: pinned ? 'unpin' : 'pin',
+            icon: 'pin' as const,
+            on: pinned,
             run: async () => {
               await setPinned(token, nodeId, !pinned);
               return pinned ? 'unpinned' : 'pinned';
@@ -218,21 +243,16 @@ export function Details({
         />
       )}
 
-      {canUpdate && (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityState={{ expanded: editing === 'text' }}
-          hitSlop={6}
+      {canUpdate && !controlled && editing !== 'text' && (
+        <IconPill
+          icon="edit"
+          label="edit title and description"
           onPress={() => {
-            setDraftTitle(title);
-            setEditing(editing === 'text' ? null : 'text');
+            setDraftTitle(null);
+            setEditing('text');
           }}
           style={styles.editLink}
-        >
-          <Label style={styles.change}>
-            {editing === 'text' ? 'close the editor' : 'edit the title and description'}
-          </Label>
-        </Pressable>
+        />
       )}
       {editing === 'text' && (
         <View>
@@ -244,12 +264,12 @@ export function Details({
             value={draftTitle}
           />
           <Composer
-            actions={[{ key: 'save', label: 'save', primary: true, allowEmpty: true }]}
+            actions={[{ key: 'save', label: 'save', primary: true, allowEmpty: true, icon: 'save' }]}
             compact
             demo={nav.demo}
             doing="that edit"
             initial={body}
-            onCancel={() => setEditing(null)}
+            onCancel={closeText}
             onSubmit={async (_, text) => {
               if (!draftTitle.trim()) throw new Error('a title is needed');
               await editIssue(token, repo, number, { title: draftTitle.trim(), body: text });
@@ -286,7 +306,7 @@ const styles = themed(() =>
       paddingTop: 6,
     },
     row: {
-      alignItems: 'baseline',
+      alignItems: 'center',
       borderBottomColor: colors.hair,
       borderBottomWidth: 1,
       flexDirection: 'row',
@@ -301,10 +321,6 @@ const styles = themed(() =>
       color: colors.ink,
       flex: 1,
       fontSize: 12,
-    },
-    change: {
-      color: colors.ink70,
-      textDecorationLine: 'underline',
     },
     editLink: {
       marginTop: 12,

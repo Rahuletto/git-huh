@@ -30,9 +30,19 @@ inventory**: every GitHub action by object, where it lives, and why the ones
 left out are left out (settings, deleting repositories, and anything that
 needs the `notifications` scope).
 
+It also watches **a machine of yours**: the `host` section reads
+`host/hostd.py`, a small standard-library Python server you run on your own
+computer and reach over your tailnet. It reports the machine's CPU, memory,
+heat and disks, the services its JSON config names (a systemd unit or a
+process), their health, CPU, memory and logs, the actions the config allows
+(restart, stop, your own commands), and any panels the config defines. The
+app draws the kinds it is given and knows nothing about any particular service
+(`host/README.md` is the config's manual).
+
 It is personal: you sign in with GitHub (OAuth's device flow, no server, no
 client secret) or paste a token, for one account or several, and nothing
-leaves the device except requests to GitHub.
+leaves the device except requests to GitHub and, if you connect one, to your
+own host.
 
 The repository is public, under the GPL v3.0 or later (`LICENSE`;
 third-party parts in `THIRD-PARTY-NOTICES.md`). The pins
@@ -136,8 +146,10 @@ compiled on a Mac.
 
 ## Layout
 
-- `src/screens/` — the section pages `Today`, `Inbox`, `Work`, `Year` (and
-  `Ideas`, local project notes), each one scrolling page composed of **blocks**;
+- `src/screens/` — the section pages `Today`, `Work` (the inbox's blocks,
+  `InboxBlocks` from `Inbox`, at its top), `Year`, `Ideas` (a local project
+  notebook: stages, steps, a repository made from an idea) and `Host` (a
+  machine, from `hostd`), each one scrolling page composed of **blocks**;
   the blocks keep their pin-named files and still export `…Screen`: `Hey`, `Now`
   (with `Weather` as a card inside it), `Clock` (`hours`), `Index` (`pulls`),
   `Brief`, `Review` (`cycle`), `Cards` (`repos`), `Poster` (`weeks`), `Flow`
@@ -150,7 +162,8 @@ compiled on a Mac.
   and the other pushed pages: `Pull`, `Thread` (issue or discussion), `Repo`
   (its `pulls`, `actions` and branch row are in `RepoTabs.tsx`), `File`,
   `NewIssue`, `User` (a profile, from any `~name`), `Search` (across GitHub),
-  `Gists` (the list and one gist), `Create` (the forms that make a pull
+  `Gists` (the list and one gist), `Inbox`'s `InboxPage` (the whole feed),
+  `Service` (one service on the host: graphs, actions, panels, log), `Create` (the forms that make a pull
   request, a release, a discussion, a file, a repository, a gist), `Account`
   (behind the avatar in every section's top-right corner: accounts, which are
   added together, notifications, links to your profile, gists, a new
@@ -194,7 +207,23 @@ compiled on a Mac.
   tested.
 - `src/lib/ideas.ts` + `ideasStorage.ts` — project notes in a dedicated document
   file (localStorage on web), outside account caches, with a separate demo
-  notebook. Storage failures reach the editor instead of being swallowed.
+  notebook. Storage failures reach the editor instead of being swallowed. The
+  notebook is version 2 (stage, steps, linked repository, `updatedAt`); a
+  version-1 notebook is migrated on read, never rejected. `new-repo` takes
+  `name`, `description` and `idea`, and links the repository it makes back to
+  that idea.
+- **The host section.** `host/hostd.py` is the server (stdlib Python, one
+  file, `host/README.md` for its config and API, `host/test_hostd.py` for its
+  shaping rules: `python3 -m unittest host/test_hostd.py`). In the app,
+  `src/lib/host.ts` (types, formatting, `squeeze`, the demo host — pure and
+  tested), `src/lib/hostClient.ts` (the requests, and the address and token in
+  the keystore), `src/hooks/useHost.ts` (settings shared across pages; polling
+  every `every` seconds only while on screen) and `src/components/HostPanel.tsx`
+  (one panel per kind, `Series`, `Meter`, `LogLines`). Release builds allow
+  plain `http` only to `*.ts.net` (`android/app/src/release/res/xml/network_security_config.xml`);
+  an IP address will not connect, a MagicDNS name will. **Never commit a real
+  host config** — `config.example.json` is generic; a real one names private
+  services and lives in `~/.config/hostd/`.
 - `src/lib/triage.ts` + `src/hooks/useTriage.ts` — the inbox's own done /
   snooze marks, per account, on the device.
 - `src/lib/notify.ts` — the background inbox check (expo-background-task,
@@ -236,10 +265,11 @@ compiled on a Mac.
   the pushed pages above the navigator, and reads which section is open from
   the path. `src/shell/sections.ts` `SECTIONS` is the list of the five, and
   `src/shell/SectionScreen.tsx` gives each its chrome and its page: `today`
-  (you · today · hours · the feed), `inbox` (the review and assigned tiles ·
-  recent), `work` (pulls · the brief · cycle · repos), `year` (weeks · split ·
-  languages · years · people) and `ideas` (project ideas saved locally on the
-  device). **A section is one page; there is no second row of tabs.** It used
+  (you · today · hours · the feed), `work` (the review and assigned tiles ·
+  the head of the inbox · pulls · the brief · cycle · repos; the tab carries
+  the inbox's count), `year` (weeks · split · languages · years · people),
+  `ideas` (project ideas saved locally on the device) and `host` (a machine of
+  yours, from `hostd`). The inbox was a section until `host` took its slot. **A section is one page; there is no second row of tabs.** It used
   to be a segmented control over a horizontal pager — a tab bar inside a tab
   bar — and that is what this layout replaced; do not bring it back. A list too
   long for its page shows its head (`Tile`, or the first rows and `More`) and
@@ -357,6 +387,13 @@ machine says — a diff, a check, a review — always beside a word or sign.
 GitHub's language and label colours are not drawn. New screens use these
 pieces; do not bring back per-screen canvases, categorical brights or a
 second typeface.
+
+**No underlined-text buttons.** An action is a pill (`IconPill`, a glyph and a
+short verb) or a round glyph button (`IconButton`) when the phone already has a
+glyph for it (share, edit, close, open elsewhere, refresh, add); the word stays
+as the accessibility label. Glyphs are SF Symbols / Material Symbols by
+meaning, in `src/components/Icon.tsx` (`GLYPHS`). `ComposerAction` takes an
+`icon`. Underlines are only for links inside rendered Markdown.
 
 Still not the Nothing design language: no dot-matrix *typeface*, no Nothing
 red (`#D71921`) **anywhere**, and dots are data, never a texture under

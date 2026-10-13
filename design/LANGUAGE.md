@@ -128,6 +128,17 @@ widget's own corner) · `tile` 14 · `pill` 999.
   its own card, on the canvas. Hairlines still divide rows *inside* a card.
 - **Pills are actions; cards are objects.** Anything with a `pill` radius does
   something when tapped.
+- **A button is never underlined text.** A line of underlined words reads as a
+  link in a paragraph, and a page of them (`change`, `edit the title and
+  description`, `branches`, `new file here`) reads as a form nobody finished.
+  An action is a pill (`IconPill`: a glyph and a short verb) or, when the
+  phone already has a glyph for it — share, edit, close, open elsewhere,
+  refresh, add — a round glyph button (`IconButton`) with the word as its
+  accessibility label. Underlines are left to links inside written prose
+  (`Markdown`).
+- **Glyphs are on controls only** (`components/Icon.tsx`): SF Symbols on iOS
+  and Material Symbols on Android, the families the tab bar already uses, in
+  ink, never decoration and never an empty state.
 - **Filled means selected or primary**: the on-state of a chip, the one button
   on the page that is the point.
 - **Full-bleed is allowed only when the artefact is the page** — `poster`,
@@ -170,7 +181,8 @@ then lets go.
 ## 7. Patterns
 
 **Navigation is one row of tabs, and a section is one page.** A bar of five
-sections at the bottom — the platform's own tab bar (Liquid Glass on iOS 26,
+sections at the bottom (`today`, `work` — with the inbox at its top — `year`,
+`ideas`, `host`) — the platform's own tab bar (Liquid Glass on iOS 26,
 Material 3's navigation bar on Android, where the selected pill is the card's
 colour) — and under each, a single page that scrolls. There is **no second
 row of tabs** inside a section: a segmented control of four or five views
@@ -239,9 +251,15 @@ second sends it. Reactions are **words** (`+1 3`, `heart 1`, `rocket`), never
 emoji, because a coloured glyph would be the loudest mark on a page with one
 ink.
 
-**Local ideas.** The notebook uses one multiline input and an explicit save
-button. It clears only after the device has saved successfully; failures
-keep the draft. Plain cards, edit and delete actions, no extra filters.
+**Local ideas.** The notebook uses one multiline input (first line the name)
+and an explicit save button. It clears only after the device has saved
+successfully; failures keep the draft. Stages are chips with counts; steps are
+a checklist whose progress is a row of dots; a repository is made from an idea
+through the ordinary new-repository form and linked back to it.
+
+**A machine is read, not driven.** The `host` section only shows what
+`hostd` serves and only runs the actions its config lists — the phone can never
+send a command of its own. A failing panel prints its error in its place.
 
 **A gesture always has a second way in.** The inbox's swipe actions are
 also accessibility actions on the row, and the words `done` and `snooze`

@@ -50,7 +50,7 @@ export type TokenState = string | null | undefined;
 /** Lines kept for the loading screen — it draws about 26 at a time. */
 const POOL_SIZE = 40;
 
-const INBOX = SECTIONS.findIndex((section) => section.key === 'inbox');
+const WORK = SECTIONS.findIndex((section) => section.key === 'work');
 
 const TOGETHER_KEY = 'accounts-together';
 const HOME_KEY = 'home-settings';
@@ -161,8 +161,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   // know who you are and kept whichever section is open: the count on the
   // bar has to be true before you tap it.
   const social = useSocial(token ?? null, login, true);
-  const queue = useQueue(token ?? null, login, section === 'inbox');
-  const tasks = useTasks(token ?? null, login, section === 'inbox');
+  const queue = useQueue(token ?? null, login, section === 'work');
+  const tasks = useTasks(token ?? null, login, section === 'work');
   const people = usePeople(token ?? null, login, section === 'year');
   // The demo keeps its marks under its own name, never under the real login
   // it happens to borrow.
@@ -291,7 +291,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       if (route) {
         setStack((current) => [...current, route]);
       } else if (data?.inbox) {
-        goToTab(INBOX);
+        goToTab(WORK);
       }
       Notifications.clearLastNotificationResponseAsync().catch(() => {});
     };

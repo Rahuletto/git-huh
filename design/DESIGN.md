@@ -194,15 +194,67 @@ by the day, week, fortnight and month, squared off past a month — so the one t
 sat longest stands out the way a peak day does on the widget. Tapping a row opens `pull`.
 
 ### 9. `ideas` — a local project notebook
-The fifth tab replaces `lab`. A `project ideas` caption with a saved count,
-then `saved on this device`, a card with one multiline text box and an
-`add idea` button. Notes appear newest first on plain cards with `edit` and
-`delete`; editing reuses the box, deletion asks inline before removing a note.
-No segments or charts. Empty, loading and error states are written in words.
+A `project ideas` caption (`2 building · 12 saved`), then `saved on this
+device`, then the stage chips with their counts — `all`, `building`, `next`,
+`idea`, `shipped`, `parked`, only the stages that have something — and a card
+with one multiline box: the first line is the idea's name, the rest its notes.
+A new idea joins the stage being looked at.
+
+Ideas are listed building first, then next, idea, shipped and parked (dimmed),
+each newest-touched first. Closed, a card is the stage as a small pill (filled
+for `building`), `3 of 5` steps, its age, the name, two lines of notes and the
+steps as a row of dots lit up to the share done. Opened, it shows all the
+notes, the stages as chips to move it, the steps as a checklist (tick, remove,
+add one in place), and the way to its repository: `make a repository` opens the
+new-repository form named after the idea (`repoName`), and once that repository
+is made it is linked to the idea, which moves to `building`. A linked idea
+opens its repository instead. `edit` reuses the box at the top; `delete` is
+pressed twice. Empty, loading and error states are written in words.
+Notebooks saved before stages existed (version 1) open with every note as an
+idea.
 Native notes live in a document file, web notes in localStorage, separate
 from disposable account caches. The demo uses a separate notebook. Saving
 must succeed before the editor clears; unreadable data is never replaced
 with an empty notebook. The old `DotsScreen` remains unlinked source.
+
+### 9b. `host` — a machine of yours, from the phone
+
+The fifth tab, where `inbox` was. Its numbers come from `host/hostd.py`, a
+small server the user runs on their own machine and reaches over their
+tailnet; `host/README.md` is its manual. The app knows nothing about any
+service: it draws the kinds the host's JSON names.
+
+Not connected, the page is one card: what to run, an address field (a
+`….ts.net` name), a token field, and `connect`, which asks the host before
+anything is saved, so a typo is said there and not as an empty page. The
+address and the token are kept in the keystore beside the GitHub token.
+
+Connected, it is three blocks. The **machine**: `ScreenHead` with its name,
+`up 4d 3h` and the settings glyph; a card of four figures (cpu, memory, heat,
+load), the last hour of CPU as a `DotRow` squeezed to forty slots (each the
+peak of the readings it stands for), and memory as a row of dots lit up to its
+share; a card of disks, each a row of dots, clay past 90%. **Services**: one
+card, a row per service: a green or clay dot and a word (`up`, `not
+answering`, `down`, `failed`), then `cpu 0.3% · 45 mb · for 2h · http 502`.
+A row pushes the service. **Panels**: one card per panel from the host's
+config, drawn by kind — `stat` a big figure (and dots up to its `max`),
+`series` the figure and its history as dots, `status` a dot and a word, `list`
+rows, `table` columns, `log` monospaced lines, `bars` a row of dots per label.
+A failing panel prints its error in its own place; the others still draw.
+
+A **service** (pushed, `host · {name}`): a card with its dot and word, its
+name, the line about it, and `up for · pid · restarts · answering · http 200 ·
+4 ms`; the glyphs to open its `url` and read it again; its actions as verbs
+(`restart`, `stop` pressed twice), only those its config lists; CPU and memory
+over the hour as dots; `answering` as a row of cells, clay where a reading was
+down, with the share; its own panels; and the end of its log — monospaced,
+scrolled sideways rather than wrapped, lines with `error`/`fail` in clay, with
+`newest` and `further back`.
+
+The page re-asks every `every` seconds (the host's sampling interval) while it
+is on screen and stops when it is not. A saved answer is drawn first and stays,
+with its age, when the host cannot be reached. The demo has a host of its own
+and asks nobody.
 
 ### 10. `archive` — pin10 (rain years)
 On a card: `year` / `today` / `before · after` heads, then one row per contribution year,
@@ -323,9 +375,10 @@ talk, REST for the files, because GraphQL's `files` connection has paths and cou
 text. The REST half is optional — a token that can read the object but not the contents still
 gets a readable conversation.
 
-### 14. `inbox` — the feed, given a section
+### 14. `inbox` — the feed, at the top of `work`
 
-The `inbox` page opens with **what wants you**: two `Tile`s side by side, `review` and
+The inbox was its own section; it is now the top of `work`, because what wants
+you is how a working day starts and a sixth tab was not an option. `work` opens with **what wants you**: two `Tile`s side by side, `review` and
 `assigned` — the lists that are about you rather than about your work. Each is a count
 (`4 waiting on you`, `4 yours to do`), a `WaitDot` per item, longest wait first, so the
 one that has sat a month is visible before anything is opened, and a line of what
@@ -333,10 +386,11 @@ matters (`oldest asked 1mo · 1 moved since you looked`; `1 overdue · quietest 
 you filed`). The whole tile opens its list in full (20 and 21, below). They were two
 tabs beside the feed, which hid both behind a label.
 
-Then the feed, pin04's, lifted out of the greeting: `ScreenHead` `recent` ·
+Then the feed, pin04's, lifted out of the greeting: `ScreenHead` `inbox` ·
 `{n} events`, the wrapped chip filter
-(`all · comments · reviews · mentions · yours`) with counts, and up to forty
-rows, each on its own card. One of the widget's marks per category — a dot for a
+(`all · comments · reviews · mentions · yours`) with counts, and the first six
+rows, each on its own card, then `all 40 events →`, which pushes the whole feed
+(`work · inbox`, up to forty rows). One of the widget's marks per category — a dot for a
 comment, a ring for a review or a mention, a square for a review request, a
 sage dot for an approval and a clay one for changes requested, a faint ring for
 your own pull request — with the category written out in words as well, the comment text
@@ -648,10 +702,10 @@ pushes the rest.
 | section | the page, top to bottom | pushes | the question it answers |
 |---|---|---|---|
 | `today` | `you` · `today` (`now` + `weather`) · `hours` · the feed | — | how am I doing |
-| `inbox` | `review` and `assigned` tiles · `recent` | the queue, the assignments | what wants me |
-| `work` | `pulls` · `the brief` · `cycle` · `repos` | the brief, read in order | what am I shipping |
+| `work` | `review` and `assigned` tiles · `inbox` (six rows) · `pulls` · `the brief` · `cycle` · `repos` | the queue, the assignments, the whole inbox, the brief | what wants me, and what am I shipping |
 | `year` | `weeks` · `split` · `languages` · `years` · `people` (three) | everyone | what was the year |
-| `ideas` | `project ideas` | — | what could I build next |
+| `ideas` | `project ideas`: stage chips, the note box, one card per idea | a new repository, named after an idea | what could I build next |
+| `host` | the machine (cpu, memory, heat, load, disks) · `services` · `panels` | one service: its graphs, actions, panels, log | is my machine and what runs on it alright |
 
 - **Bar**: the system's own tab bar, through expo-router's `NativeTabs`
   (`app/(tabs)/_layout.tsx`). On iOS it is `UITabBarController` — Liquid Glass
@@ -659,13 +713,14 @@ pushes the rest.
   scroll down. On Android it is Material 3's navigation bar on canvas, mono
   labels, Material Symbols, and the selected indicator in the card's colour —
   the same surface every screen above it is drawn on. A bar drawn in JavaScript could
-  never look like either system's. `inbox` carries a count of the events addressed to you (review
+  never look like either system's. `work` carries a count of the events addressed to you (review
   requests, mentions, changes requested), which is the honest version of a
   badge: it is computed from the rows that are actually there.
 - **Blocks** (`Block`, `ScreenHead` in `screens/shared.tsx`): a block's head and
   its cards sit ten apart; blocks sit thirty-four apart, so the heads read as the
   dividers. A block's one action — `share` on a chart, `change` on the feed — is a
-  small pill at the end of its head.
+  round glyph button at the end of its head (`IconButton`): the share glyph, the
+  settings glyph. The word is its accessibility label.
 - **Folded lists**: a `Tile` (`components/Tile.tsx`) is a list as one card — what it
   is, how many, a `WaitDot` per item, a line of what matters — and opens the list;
   `More` (`all 6 people →`) follows the first few rows of one. Either pushes the

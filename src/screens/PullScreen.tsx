@@ -15,6 +15,7 @@ import { ChecksPanel } from '../components/ChecksPanel';
 import { CommentTools } from '../components/CommentTools';
 import { Composer } from '../components/Composer';
 import { Details } from '../components/Details';
+import { IconPill } from '../components/Icon';
 import { Diff } from '../components/Diff';
 import { DiffDots } from '../components/DiffDots';
 import { Markdown } from '../components/Markdown';
@@ -117,16 +118,13 @@ export function PullScreen({ repo, number }: { repo: string; number: number }) {
       {state.status === 'error' && (
         <View style={styles.errorStack}>
           <Body style={styles.error}>{explain(state.error, 'opening this pull request')}</Body>
-          <Pressable
-            accessibilityRole="link"
+          <IconPill
+            icon="external"
+            label="open it on github"
             onPress={() =>
-              Linking.openURL(`https://github.com/${repo}/pull/${number}`).catch(
-                () => {},
-              )
+              Linking.openURL(`https://github.com/${repo}/pull/${number}`).catch(() => {})
             }
-          >
-            <Label style={styles.underline}>open it on github</Label>
-          </Pressable>
+          />
         </View>
       )}
 
@@ -180,11 +178,11 @@ export function PullScreen({ repo, number }: { repo: string; number: number }) {
                 <MergeBox onChanged={state.reload} pull={pull} />
                 <Composer
                   actions={[
-                    { key: 'comment', label: 'comment', primary: true },
+                    { key: 'comment', label: 'comment', primary: true, icon: 'send' as const },
                     ...(!pull.viewerIsAuthor && pull.state === 'OPEN'
                       ? [
-                          { key: 'approve', label: 'approve', allowEmpty: true },
-                          { key: 'changes', label: 'request changes' },
+                          { key: 'approve', label: 'approve', allowEmpty: true, icon: 'approve' as const },
+                          { key: 'changes', label: 'request changes', icon: 'edit' as const },
                         ]
                       : []),
                   ]}
@@ -549,7 +547,6 @@ const styles = themed(() =>
       color: colors.ink40,
       fontSize: 10,
       textAlign: 'right',
-      textDecorationLine: 'underline',
     },
     find: {
       backgroundColor: colors.card,
@@ -695,10 +692,6 @@ const styles = themed(() =>
     },
     error: {
       color: colors.no,
-    },
-    underline: {
-      color: colors.ink,
-      textDecorationLine: 'underline',
     },
   }),
 );

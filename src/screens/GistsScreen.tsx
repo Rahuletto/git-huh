@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { Composer } from '../components/Composer';
+import { IconPill } from '../components/Icon';
 import { OverlayFrame, SavedNote } from '../components/Overlay';
 import { Body, Data, Heading, Label, Micro } from '../components/Type';
 import { useRemote } from '../hooks/useRemote';
@@ -155,9 +156,12 @@ export function GistScreen({ id }: { id: string }) {
             </View>
           ))}
           {gist.url !== '#' && (
-            <Pressable accessibilityRole="link" onPress={() => Linking.openURL(gist.url).catch(() => {})}>
-              <Label style={styles.link}>open on github</Label>
-            </Pressable>
+            <IconPill
+              icon="external"
+              label="open on github"
+              onPress={() => Linking.openURL(gist.url).catch(() => {})}
+              style={styles.link}
+            />
           )}
         </ScrollView>
       )}
@@ -230,9 +234,7 @@ const styles = themed(() =>
       lineHeight: 16,
     },
     link: {
-      color: colors.ink70,
       marginTop: 18,
-      textDecorationLine: 'underline',
     },
     note: {
       marginTop: 16,

@@ -1,7 +1,8 @@
-import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 
 import { Card } from '../components/Card';
 import { DotField } from '../components/DotField';
+import { IconPill } from '../components/Icon';
 import { Marquee } from '../components/Marquee';
 import { FeedRow } from '../components/SocialFeed';
 import { Body, Display, Micro, Serif } from '../components/Type';
@@ -144,11 +145,10 @@ export function HomeFeed({
           {history.loading || social.status === 'loading' ? (
             <Micro style={styles.blockNote}>reading older pull requests…</Micro>
           ) : history.failed ? (
-            <Pressable accessibilityRole="button" onPress={history.more}>
-              <Micro style={styles.blockNote}>
-                github stopped answering · <Text style={styles.link}>try again</Text>
-              </Micro>
-            </Pressable>
+            <View style={styles.endRow}>
+              <Micro style={styles.blockNote}>github stopped answering</Micro>
+              <IconPill icon="refresh" label="try again" onPress={history.more} />
+            </View>
           ) : history.done ? (
             <Micro style={styles.blockNote}>
               {rows.length === 0
@@ -156,9 +156,7 @@ export function HomeFeed({
                 : `that is everything${oldest ? `, back to ${monthOf(oldest.at)}` : ''}`}
             </Micro>
           ) : (
-            <Pressable accessibilityRole="button" hitSlop={10} onPress={history.more}>
-              <Micro style={[styles.blockNote, styles.link]}>older →</Micro>
-            </Pressable>
+            <IconPill icon="expand" label="older" onPress={history.more} />
           )}
         </View>
       )}
@@ -276,9 +274,9 @@ const styles = themed(() =>
       alignItems: 'center',
       paddingVertical: 14,
     },
-    link: {
-      color: colors.ink,
-      textDecorationLine: 'underline',
+    endRow: {
+      alignItems: 'center',
+      gap: 8,
     },
   }),
 );

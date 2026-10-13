@@ -2,7 +2,8 @@
 
 Your GitHub history drawn the way its home-screen widget draws it — your own
 commit messages travelling across a card, the days as dots under them — plus an
-inbox you can clear from your phone.
+inbox you can clear from your phone, and a look at the machine your projects run
+on.
 
 > **Alpha.** Built and used daily on Android. The iOS app and widget are
 > generated from the same code but have not been through a device yet.
@@ -27,10 +28,10 @@ not a second row of tabs.
 | section | on the page, top to bottom | |
 |---|---|---|
 | **today** | you · today · hours · the feed | the widget with room to breathe, today in lit dots, your streak as a forecast, when in the day you commit, and a feed that keeps going |
-| **inbox** | review · assigned · recent | how many are waiting on your review and what is assigned to you, each a card with a dot for every wait; then review requests, mentions, reviews and replies — swipe to mark done or snooze until morning |
-| **work** | pulls · the brief · cycle · repos | your open pull requests, your descriptions read one after another, time to merge, a deck of repositories |
+| **work** | review · assigned · inbox · pulls · the brief · cycle · repos | what wants you first: how many are waiting on your review and what is assigned to you, each a card with a dot for every wait, then the inbox (review requests, mentions, reviews and replies; swipe to mark done or snooze until morning). Then your open pull requests, your descriptions read one after another, time to merge, a deck of repositories |
 | **year** | weeks · split · languages · years · people | every year of contributions, where they went, what they were written in, and who you reviewed with |
-| **ideas** | project ideas | a simple notebook saved on this device, with add, edit and delete |
+| **ideas** | project ideas | a notebook of projects saved on this device: stages from idea to shipped, steps with progress, and a repository made from an idea and linked back to it |
+| **host** | the machine · services · panels | a computer of yours over your tailnet: CPU, memory, heat and disks; each service up or down, answering or not, its CPU, memory and log, restart and stop; and any graphs, lists or tables you define in a JSON file. Served by [`host/hostd.py`](host/README.md), one Python file |
 
 It also does the things that usually end with "I'll do it on the laptop":
 
@@ -77,8 +78,9 @@ It sits on your wallpaper's Material You colour.
 
 ## Privacy
 
-There is no git-huh server. The app talks to `api.github.com` and nothing
-else: no analytics, no crash reporting, no accounts. Tokens are kept in the
+There is no git-huh server. The app talks to `api.github.com` and, if you
+connect one, to your own `hostd` on your tailnet, and nothing else: no
+analytics, no crash reporting, no accounts. Tokens are kept in the
 Android Keystore (iOS Keychain), and everything the app caches stays in its
 own storage on the phone. Removing an account deletes what was saved for it.
 

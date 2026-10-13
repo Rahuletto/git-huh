@@ -8,7 +8,7 @@ import { Label } from '../components/Type';
 import { Wordmark } from '../components/Wordmark';
 import { savedAge } from '../lib/store';
 import { IdeasScreen } from '../screens/IdeasScreen';
-import { InboxScreen } from '../screens/InboxScreen';
+import { HostScreen } from '../screens/HostScreen';
 import { TodayScreen } from '../screens/TodayScreen';
 import { WorkScreen } from '../screens/WorkScreen';
 import { YearScreen } from '../screens/YearScreen';
@@ -62,14 +62,14 @@ export function SectionScreen({ index }: { index: number }) {
     switch (section.key) {
       case 'today':
         return <TodayScreen active={active} />;
-      case 'inbox':
-        return <InboxScreen />;
       case 'work':
         return <WorkScreen />;
       case 'year':
         return <YearScreen active={active} />;
       case 'ideas':
-        return <IdeasScreen key={nav.demo ? 'demo' : 'local'} demo={nav.demo} />;
+        return <IdeasScreen active={active} demo={nav.demo} key={nav.demo ? 'demo' : 'local'} />;
+      case 'host':
+        return <HostScreen active={active} />;
     }
   })();
 
@@ -78,7 +78,7 @@ export function SectionScreen({ index }: { index: number }) {
       <View style={styles.chrome}>
         <Wordmark size={17} />
         <View style={styles.corner}>
-          {section.key !== 'ideas' && contributions.status === 'ready' &&
+          {section.key !== 'ideas' && section.key !== 'host' && contributions.status === 'ready' &&
             contributions.offline &&
             contributions.savedAt != null && (
               <Label numberOfLines={1} style={styles.handle}>
@@ -106,7 +106,7 @@ export function SectionScreen({ index }: { index: number }) {
         </View>
       </View>
 
-      {section.key !== 'ideas' && session.scopes === 'limited' && <ScopeNotice />}
+      {section.key !== 'ideas' && section.key !== 'host' && session.scopes === 'limited' && <ScopeNotice />}
 
       <View style={styles.body}>{page}</View>
     </SafeAreaView>

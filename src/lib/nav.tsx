@@ -45,7 +45,8 @@ export type Route =
   | { kind: 'new-discussion'; repo: string }
   /** A file that does not exist yet, in `dir` on `ref`. */
   | { kind: 'new-file'; repo: string; dir: string; ref: string }
-  | { kind: 'new-repo' }
+  /** Named after an idea when made from one, and linked back to it. */
+  | { kind: 'new-repo'; name?: string; description?: string; idea?: string }
   /** A person or an organisation: their profile, their repositories, follow. */
   | { kind: 'user'; login: string }
   /** Repositories, issues, pull requests and people, across GitHub. */
@@ -66,7 +67,11 @@ export type Route =
   /** Your pull requests' descriptions, read one after another. */
   | { kind: 'brief' }
   /** Everyone you reviewed with this year. */
-  | { kind: 'people' };
+  | { kind: 'people' }
+  /** The whole inbox feed, from its head on `work`. */
+  | { kind: 'inbox' }
+  /** One service on the host, from the `host` section. */
+  | { kind: 'service'; id: string; name: string };
 
 export interface Nav {
   open: (route: Route) => void;

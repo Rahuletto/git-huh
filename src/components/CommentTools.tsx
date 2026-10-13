@@ -1,13 +1,13 @@
 import { useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
 import { useNav } from '../lib/nav';
 import type { Reaction } from '../lib/reactions';
 import { deleteComment, editComment, type CommentKind } from '../lib/writes';
-import { colors, themed } from '../theme';
+import { themed } from '../theme';
 import { Composer, type ComposerAction } from './Composer';
+import { IconButton } from './Icon';
 import { Reactions } from './Reactions';
-import { Label } from './Type';
 
 export interface Verb {
   action: ComposerAction;
@@ -53,7 +53,7 @@ export function CommentTools({
     ...(editKind && canDelete
       ? [
           {
-            action: { key: 'delete', label: 'delete', confirm: 'delete it?' },
+            action: { key: 'delete', label: 'delete', confirm: 'delete it?', icon: 'delete' as const },
             run: async () => {
               await deleteComment(token, editKind, subjectId);
               return 'deleted';
@@ -67,28 +67,28 @@ export function CommentTools({
     <View style={styles.tools}>
       <Reactions onChanged={onChanged} reactions={reactions} subjectId={subjectId} />
 
-      <View style={styles.links}>
-        {reply && (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityState={{ expanded: open === 'reply' }}
-            hitSlop={6}
-            onPress={() => setOpen(open === 'reply' ? null : 'reply')}
-          >
-            <Label style={styles.link}>{reply.label}</Label>
-          </Pressable>
-        )}
-        {editKind && canEdit && (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityState={{ expanded: open === 'edit' }}
-            hitSlop={6}
-            onPress={() => setOpen(open === 'edit' ? null : 'edit')}
-          >
-            <Label style={styles.link}>edit</Label>
-          </Pressable>
-        )}
-      </View>
+      {(reply || (editKind && canEdit)) && (
+        <View style={styles.links}>
+          {reply && (
+            <IconButton
+              icon={open === 'reply' ? 'close' : 'reply'}
+              label={open === 'reply' ? 'close the reply' : reply.label}
+              on={open === 'reply'}
+              onPress={() => setOpen(open === 'reply' ? null : 'reply')}
+              size={30}
+            />
+          )}
+          {editKind && canEdit && (
+            <IconButton
+              icon={open === 'edit' ? 'close' : 'edit'}
+              label={open === 'edit' ? 'close the editor' : 'edit what you said'}
+              on={open === 'edit'}
+              onPress={() => setOpen(open === 'edit' ? null : 'edit')}
+              size={30}
+            />
+          )}
+        </View>
+      )}
 
       {all.length > 0 && (
         <Composer
@@ -107,7 +107,7 @@ export function CommentTools({
 
       {open === 'reply' && reply && (
         <Composer
-          actions={[{ key: 'reply', label: 'reply', primary: true }]}
+          actions={[{ key: 'reply', label: 'reply', primary: true, icon: 'send' }]}
           compact
           demo={nav.demo}
           doing="that reply"
@@ -123,7 +123,7 @@ export function CommentTools({
       )}
       {open === 'edit' && editKind && (
         <Composer
-          actions={[{ key: 'save', label: 'save the edit', primary: true }]}
+          actions={[{ key: 'save', label: 'save the edit', primary: true, icon: 'save' }]}
           compact
           demo={nav.demo}
           doing="that edit"
@@ -149,12 +149,8 @@ const styles = themed(() =>
     },
     links: {
       flexDirection: 'row',
-      gap: 16,
+      gap: 8,
       marginTop: 8,
-    },
-    link: {
-      color: colors.ink70,
-      textDecorationLine: 'underline',
     },
   }),
 );

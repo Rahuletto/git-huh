@@ -1,0 +1,5 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- The host section talks to hostd over the tailnet in plain http
+         (WireGuard already encrypts it); everything else stays https-only. -->
+    <application android:networkSecurityConfig="@xml/network_security_config" />
+</manifest>

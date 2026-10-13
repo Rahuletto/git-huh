@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 
 import { Composer } from '../components/Composer';
+import { Icon, IconButton, IconPill } from '../components/Icon';
 import { Markdown } from '../components/Markdown';
 import { OverlayFrame, SavedNote } from '../components/Overlay';
 import { Squiggle } from '../components/Squiggle';
@@ -124,21 +125,19 @@ export function RepoScreen({ repo, initialTab }: { repo: string; initialTab?: Re
           </View>
         )}
         <View style={styles.owner}>
-          <Pressable
-            accessibilityRole="link"
-            hitSlop={6}
+          <IconPill
+            dim
+            icon="person"
+            label={`~${repo.split('/')[0]}`}
             onPress={() => nav.open({ kind: 'user', login: repo.split('/')[0] })}
-          >
-            <Label style={styles.link}>~{repo.split('/')[0]}</Label>
-          </Pressable>
+          />
           {repoInfo?.parent && (
-            <Pressable
-              accessibilityRole="link"
-              hitSlop={6}
+            <IconPill
+              dim
+              icon="fork"
+              label={`forked from ${repoInfo.parent}`}
               onPress={() => nav.open({ kind: 'repo', repo: repoInfo.parent ?? '' })}
-            >
-              <Label style={styles.link}>forked from {repoInfo.parent}</Label>
-            </Pressable>
+            />
           )}
         </View>
         {repoInfo && <RepoVerbs info={repoInfo} onChanged={info.reload} repo={repo} />}
@@ -196,10 +195,10 @@ function RepoVerbs({ repo, info, onChanged }: { repo: string; info: RepoInfo; on
   return (
     <Composer
       actions={[
-        { key: 'star', label: info.starred ? `★ starred ${fmt(info.stars)}` : `☆ star ${fmt(info.stars)}`, on: info.starred },
-        { key: 'watch', label: watching ? 'watching' : 'watch', on: watching },
-        { key: 'ignore', label: ignoring ? 'ignoring' : 'ignore', on: ignoring },
-        ...(!own ? [{ key: 'fork', label: `fork ${fmt(info.forks)}`, confirm: 'fork it to your account?' }] : []),
+        { key: 'star', label: info.starred ? `starred ${fmt(info.stars)}` : `star ${fmt(info.stars)}`, on: info.starred, icon: 'star' as const },
+        { key: 'watch', label: watching ? 'watching' : 'watch', on: watching, icon: 'watch' as const },
+        { key: 'ignore', label: ignoring ? 'ignoring' : 'ignore', on: ignoring, icon: 'dismiss' as const },
+        ...(!own ? [{ key: 'fork', label: `fork ${fmt(info.forks)}`, confirm: 'fork it to your account?', icon: 'fork' as const }] : []),
       ]}
       bare
       demo={nav.demo}
@@ -278,33 +277,37 @@ function Code({ repo, info }: { repo: string; info: RepoInfo | null }) {
       ) : (
         <>
           <Branches branch={ref} info={info} onBranch={setBranch} repo={repo} />
-          <View style={styles.crumbs}>
-            <Pressable accessibilityRole="button" onPress={() => setPath('')}>
-              <Data style={crumbs.length === 0 ? styles.crumbOn : styles.crumb}>{repo.split('/')[1]}</Data>
-            </Pressable>
-            {crumbs.map((crumb, index) => (
-              <View key={index} style={styles.crumbPair}>
-                <Data style={styles.crumbSlash}>/</Data>
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={() => setPath(crumbs.slice(0, index + 1).join('/'))}
-                >
-                  <Data style={index === crumbs.length - 1 ? styles.crumbOn : styles.crumb}>{crumb}</Data>
+          <View style={styles.crumbRow}>
+            <View style={styles.crumbs}>
+              {crumbs.length === 0 ? (
+                <Data style={styles.crumb}>files</Data>
+              ) : (
+                <Pressable accessibilityRole="button" hitSlop={6} onPress={() => setPath('')}>
+                  <Data style={styles.crumb}>{repo.split('/')[1]}</Data>
                 </Pressable>
-              </View>
-            ))}
+              )}
+              {crumbs.map((crumb, index) => (
+                <View key={index} style={styles.crumbPair}>
+                  <Data style={styles.crumbSlash}>/</Data>
+                  <Pressable
+                    accessibilityRole="button"
+                    hitSlop={6}
+                    onPress={() => setPath(crumbs.slice(0, index + 1).join('/'))}
+                  >
+                    <Data style={index === crumbs.length - 1 ? styles.crumbOn : styles.crumb}>{crumb}</Data>
+                  </Pressable>
+                </View>
+              ))}
+            </View>
+            {canWrite && (
+              <IconButton
+                icon="add"
+                label={`new file in ${path || 'the top folder'}`}
+                onPress={() => nav.open({ kind: 'new-file', repo, dir: path, ref })}
+                size={30}
+              />
+            )}
           </View>
-
-          {canWrite && (
-            <Pressable
-              accessibilityRole="button"
-              hitSlop={6}
-              onPress={() => nav.open({ kind: 'new-file', repo, dir: path, ref })}
-              style={styles.newFile}
-            >
-              <Label style={styles.link}>new file here</Label>
-            </Pressable>
-          )}
           {listing.status === 'loading' && <Label style={styles.note}>opening the folder…</Label>}
           {listing.status === 'error' && <Label style={styles.error}>could not list this folder</Label>}
           {listing.status === 'ready' &&
@@ -348,7 +351,8 @@ export function SearchField({
   searching: boolean;
 }) {
   return (
-    <View style={styles.searchRow}>
+    <View style={styles.searchBox}>
+      <Icon color={colors.ink40} name="search" size={16} />
       <TextInput
         autoCapitalize="none"
         autoCorrect={false}
@@ -360,20 +364,18 @@ export function SearchField({
         style={styles.search}
         value={draft}
       />
-      {searching ? (
-        <Pressable accessibilityRole="button" onPress={onClear} style={styles.ghost}>
-          <Label style={styles.ghostLabel}>clear</Label>
-        </Pressable>
-      ) : (
-        <Pressable
-          accessibilityRole="button"
-          disabled={!draft.trim()}
-          onPress={onSubmit}
-          style={[styles.solid, !draft.trim() && styles.disabled]}
-        >
-          <Label style={styles.solidLabel}>search</Label>
-        </Pressable>
-      )}
+      {searching || draft ? (
+        <IconButton
+          icon="close"
+          label="clear the search"
+          onPress={onClear}
+          size={28}
+          style={styles.searchClear}
+        />
+      ) : null}
+      {!searching && draft.trim() ? (
+        <IconButton icon="search" label="search" on onPress={onSubmit} size={28} />
+      ) : null}
     </View>
   );
 }
@@ -567,15 +569,11 @@ function Releases({ repo, info }: { repo: string; info: RepoInfo | null }) {
                 <Markdown source={release.body} width={width - space.gutter * 2} />
                 <View style={styles.releaseLinks}>
                   {release.url && (
-                    <Pressable
-                      accessibilityRole="link"
-                      hitSlop={6}
+                    <IconPill
+                      icon="external"
+                      label={release.assets > 0 ? 'assets on github' : 'open on github'}
                       onPress={() => Linking.openURL(release.url).catch(() => {})}
-                    >
-                      <Label style={styles.link}>
-                        {release.assets > 0 ? 'assets on github' : 'open on github'}
-                      </Label>
-                    </Pressable>
+                    />
                   )}
                 </View>
                 {canWrite && (
@@ -744,14 +742,13 @@ function Security({ repo, info }: { repo: string; info: RepoInfo | null }) {
               {alert.patched ? ` → fixed in ${alert.patched}` : ' · no fix yet'} · {alert.manifest}
             </Micro>
             {canWrite && (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityState={{ expanded: dismissing === alert.number }}
-                hitSlop={6}
+              <IconPill
+                icon={dismissing === alert.number ? 'close' : 'dismiss'}
+                label={dismissing === alert.number ? 'keep it' : 'dismiss'}
+                on={dismissing === alert.number}
                 onPress={() => setDismissing(dismissing === alert.number ? null : alert.number)}
-              >
-                <Label style={styles.link}>{dismissing === alert.number ? 'keep it' : 'dismiss'}</Label>
-              </Pressable>
+                style={styles.dismiss}
+              />
             )}
             {dismissing === alert.number && (
               <Composer
@@ -837,24 +834,41 @@ const styles = themed(() =>
       flexDirection: 'row',
       gap: 8,
     },
-    search: {
+    searchBox: {
+      alignItems: 'center',
       backgroundColor: colors.card,
       borderColor: colors.hair,
       borderRadius: radii.pill,
       borderWidth: 1,
+      flexDirection: 'row',
+      gap: 8,
+      minHeight: 44,
+      paddingLeft: 14,
+      paddingRight: 6,
+    },
+    search: {
       color: colors.ink,
       flex: 1,
       fontFamily: fonts.mono,
       fontSize: 12,
-      paddingHorizontal: 14,
       paddingVertical: 8,
+    },
+    searchClear: {
+      borderColor: 'transparent',
+    },
+    crumbRow: {
+      alignItems: 'center',
+      flexDirection: 'row',
+      gap: 10,
+      justifyContent: 'space-between',
+      marginBottom: 6,
+      marginTop: 14,
     },
     crumbs: {
       alignItems: 'baseline',
+      flex: 1,
       flexDirection: 'row',
       flexWrap: 'wrap',
-      marginBottom: 6,
-      marginTop: 14,
     },
     crumbPair: {
       alignItems: 'baseline',
@@ -863,7 +877,6 @@ const styles = themed(() =>
     crumb: {
       color: colors.ink40,
       fontSize: 12,
-      textDecorationLine: 'underline',
     },
     crumbOn: {
       color: colors.ink,
@@ -961,12 +974,8 @@ const styles = themed(() =>
       gap: 14,
       marginTop: 10,
     },
-    link: {
-      color: colors.ink70,
-      textDecorationLine: 'underline',
-    },
-    newFile: {
-      marginBottom: 4,
+    dismiss: {
+      marginTop: 6,
     },
     releaseLinks: {
       flexDirection: 'row',

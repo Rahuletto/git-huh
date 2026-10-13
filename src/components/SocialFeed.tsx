@@ -18,7 +18,7 @@ import {
   type SocialFilter,
 } from '../lib/social';
 import { stateOf, type TriageState } from '../lib/triage';
-import { ago } from '../screens/shared';
+import { ago, More } from '../screens/shared';
 import { colors, radii, themed } from '../theme';
 
 // The feed has a section to itself, so it lists what it has rather than the
@@ -47,10 +47,16 @@ export function SocialFeed({
   state,
   triage,
   onOpen,
+  limit = MAX_ROWS,
+  onMore,
 }: {
   state: SocialState;
   triage: Triage;
   onOpen: (event: SocialEvent) => void;
+  /** How many rows to draw here; a section's page shows the head of the feed. */
+  limit?: number;
+  /** Pushes the whole feed, when there is more of it than `limit`. */
+  onMore?: () => void;
 }) {
   const [view, setView] = useState<View_>('all');
 
@@ -63,7 +69,8 @@ export function SocialFeed({
   const open = byState('open');
 
   const folder = view === 'snoozed' || view === 'done';
-  const rows = (folder ? byState(view) : filterEvents(open, view)).slice(0, MAX_ROWS);
+  const all = folder ? byState(view) : filterEvents(open, view);
+  const rows = all.slice(0, Math.min(limit, MAX_ROWS));
 
   const count = (value: View_) =>
     value === 'snoozed' || value === 'done'
@@ -137,6 +144,10 @@ export function SocialFeed({
           <FeedRow event={event} onOpen={() => onOpen(event)} />
         </SwipeRow>
       ))}
+
+      {onMore && all.length > rows.length && (
+        <More label={`all ${Math.min(all.length, MAX_ROWS)} ${view === 'all' ? 'events' : view}`} onPress={onMore} />
+      )}
     </View>
   );
 }
