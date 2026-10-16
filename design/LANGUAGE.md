@@ -272,6 +272,11 @@ through a list adds previous/next to that page; it does not create another
 reader. Optional data failures stay in the affected section with their reason
 and a retry action. They never turn readable content into a full-page error.
 
+**Keep writing visible.** A form scrolls its focused field and caret above the
+keyboard, with breathing room. This continues when focus changes or multiline
+text grows. Use the shared `FormScrollView` for pages with inputs or composers;
+buttons remain tappable while typing, and dragging the page dismisses the keyboard.
+
 **Detail pushes; sections do not.** A pull request, a thread, a repository,
 a file: each one pushes over what is there with `← back`, and back pops it.
 Nothing in the bar ever pushes.

@@ -10,6 +10,7 @@ import {
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useColorScheme, View } from 'react-native';
+import { KeyboardProvider } from 'react-native-keyboard-controller';
 
 import { SessionProvider } from '../src/shell/session';
 import { colors, setScheme } from '../src/theme';
@@ -38,15 +39,17 @@ export default function RootLayout() {
   }
 
   return (
-    <SessionProvider>
-      <StatusBar style="auto" />
-      <Stack
-        key={scheme}
-        screenOptions={{
-          contentStyle: { backgroundColor: colors.canvas },
-          headerShown: false,
-        }}
-      />
-    </SessionProvider>
+    <KeyboardProvider>
+      <SessionProvider>
+        <StatusBar style="auto" />
+        <Stack
+          key={scheme}
+          screenOptions={{
+            contentStyle: { backgroundColor: colors.canvas },
+            headerShown: false,
+          }}
+        />
+      </SessionProvider>
+    </KeyboardProvider>
   );
 }

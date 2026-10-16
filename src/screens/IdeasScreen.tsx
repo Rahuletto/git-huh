@@ -1,15 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Keyboard,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   TextInput,
   View,
 } from 'react-native';
 
+import { FormScrollView, type FormScrollHandle } from '../components/FormScrollView';
 import { Card } from '../components/Card';
 import { Meter } from '../components/HostPanel';
 import { IconButton, IconPill } from '../components/Icon';
@@ -67,7 +65,7 @@ export function IdeasScreen({ demo, active }: { demo: boolean; active: boolean }
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const locked = useRef(false);
-  const scroll = useRef<ScrollView>(null);
+  const scroll = useRef<FormScrollHandle>(null);
   const input = useRef<TextInput>(null);
 
   const load = useCallback(
@@ -127,106 +125,104 @@ export function IdeasScreen({ demo, active }: { demo: boolean; active: boolean }
   const shown = ideas ? ordered(ideas).filter((idea) => filter === 'all' || idea.stage === filter) : [];
 
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.fill}>
-      <ScrollView
-        contentContainerStyle={styles.page}
-        keyboardShouldPersistTaps="handled"
-        ref={scroll}
-        showsVerticalScrollIndicator={false}
-      >
-        <ScreenHead
-          left="project ideas"
-          right={tally === null ? undefined : `${tally.building} building · ${tally.all} saved`}
-        />
-        <Micro style={styles.dim}>{demo ? 'demo notebook · saved on this device' : 'saved on this device · nothing leaves it'}</Micro>
-        {error && (
-          <Body accessibilityLiveRegion="polite" style={styles.error}>
-            {error}
-          </Body>
-        )}
+    <FormScrollView
+      contentContainerStyle={styles.page}
+      keyboardShouldPersistTaps="handled"
+      ref={scroll}
+      showsVerticalScrollIndicator={false}
+    >
+      <ScreenHead
+        left="project ideas"
+        right={tally === null ? undefined : `${tally.building} building · ${tally.all} saved`}
+      />
+      <Micro style={styles.dim}>{demo ? 'demo notebook · saved on this device' : 'saved on this device · nothing leaves it'}</Micro>
+      {error && (
+        <Body accessibilityLiveRegion="polite" style={styles.error}>
+          {error}
+        </Body>
+      )}
 
-        {ideas === null ? (
-          error ? (
-            <IconPill icon="refresh" label="try again" onPress={load} />
-          ) : (
-            <Body>opening your ideas…</Body>
-          )
+      {ideas === null ? (
+        error ? (
+          <IconPill icon="refresh" label="try again" onPress={load} />
         ) : (
-          <>
-            {tally && tally.all > 0 && (
-              <Chips
-                current={filter}
-                items={[
-                  { key: 'all' as Filter, label: `all ${tally.all}` },
-                  ...STAGES.filter((stage) => tally[stage] > 0 || stage === filter).map((stage) => ({
-                    key: stage as Filter,
-                    label: `${STAGE_WORDS[stage]} ${tally[stage]}`,
-                  })),
-                ]}
-                onSelect={setFilter}
-              />
-            )}
+          <Body>opening your ideas…</Body>
+        )
+      ) : (
+        <>
+          {tally && tally.all > 0 && (
+            <Chips
+              current={filter}
+              items={[
+                { key: 'all' as Filter, label: `all ${tally.all}` },
+                ...STAGES.filter((stage) => tally[stage] > 0 || stage === filter).map((stage) => ({
+                  key: stage as Filter,
+                  label: `${STAGE_WORDS[stage]} ${tally[stage]}`,
+                })),
+              ]}
+              onSelect={setFilter}
+            />
+          )}
 
-            <Card title={editing ? 'edit idea' : filter === 'all' || filter === 'idea' ? 'something to build' : `add to ${filter}`}>
-              <TextInput
-                accessibilityLabel="project idea"
-                editable={!busy}
-                multiline
-                onChangeText={setText}
-                placeholder={'a name on the first line\nnotes under it'}
-                placeholderTextColor={colors.ink40}
-                ref={input}
-                style={styles.input}
-                textAlignVertical="top"
-                value={text}
+          <Card title={editing ? 'edit idea' : filter === 'all' || filter === 'idea' ? 'something to build' : `add to ${filter}`}>
+            <TextInput
+              accessibilityLabel="project idea"
+              editable={!busy}
+              multiline
+              onChangeText={setText}
+              placeholder={'a name on the first line\nnotes under it'}
+              placeholderTextColor={colors.ink40}
+              ref={input}
+              style={styles.input}
+              textAlignVertical="top"
+              value={text}
+            />
+            <View style={styles.actions}>
+              <IconPill
+                icon={editing ? 'save' : 'add'}
+                label={busy ? 'saving…' : editing ? 'save changes' : 'add idea'}
+                on={!!text.trim()}
+                onPress={save}
               />
-              <View style={styles.actions}>
-                <IconPill
-                  icon={editing ? 'save' : 'add'}
-                  label={busy ? 'saving…' : editing ? 'save changes' : 'add idea'}
-                  on={!!text.trim()}
-                  onPress={save}
-                />
-                {editing && <IconPill icon="close" label="cancel" onPress={reset} />}
-              </View>
-            </Card>
+              {editing && <IconPill icon="close" label="cancel" onPress={reset} />}
+            </View>
+          </Card>
 
-            {ideas.length === 0 && (
-              <Body style={styles.empty}>no ideas yet · the next project starts here</Body>
-            )}
-            {ideas.length > 0 && shown.length === 0 && (
-              <Body style={styles.empty}>nothing {filter} right now</Body>
-            )}
+          {ideas.length === 0 && (
+            <Body style={styles.empty}>no ideas yet · the next project starts here</Body>
+          )}
+          {ideas.length > 0 && shown.length === 0 && (
+            <Body style={styles.empty}>nothing {filter} right now</Body>
+          )}
 
-            {shown.map((idea) => (
-              <IdeaCard
-                busy={busy}
-                idea={idea}
-                key={idea.id}
-                onChange={(edit) => change(idea.id, edit)}
-                onDelete={() => {
-                  void persist(
-                    ideas.filter((item) => item.id !== idea.id),
-                    () => {
-                      if (editing === idea.id) reset();
-                    },
-                  );
-                }}
-                onEdit={() => {
-                  setEditing(idea.id);
-                  setText(idea.text);
-                  setError(null);
-                  scroll.current?.scrollTo({ y: 0, animated: true });
-                  input.current?.focus();
-                }}
-                onToggle={() => setOpen(open === idea.id ? null : idea.id)}
-                open={open === idea.id}
-              />
-            ))}
-          </>
-        )}
-      </ScrollView>
-    </KeyboardAvoidingView>
+          {shown.map((idea) => (
+            <IdeaCard
+              busy={busy}
+              idea={idea}
+              key={idea.id}
+              onChange={(edit) => change(idea.id, edit)}
+              onDelete={() => {
+                void persist(
+                  ideas.filter((item) => item.id !== idea.id),
+                  () => {
+                    if (editing === idea.id) reset();
+                  },
+                );
+              }}
+              onEdit={() => {
+                setEditing(idea.id);
+                setText(idea.text);
+                setError(null);
+                scroll.current?.scrollTo({ y: 0, animated: true });
+                input.current?.focus();
+              }}
+              onToggle={() => setOpen(open === idea.id ? null : idea.id)}
+              open={open === idea.id}
+            />
+          ))}
+        </>
+      )}
+    </FormScrollView>
   );
 }
 
@@ -407,7 +403,6 @@ function IdeaCard({
 
 const styles = themed(() =>
   StyleSheet.create({
-    fill: { flex: 1 },
     flex: { flex: 1 },
     page: { gap: 10, paddingBottom: 28, paddingHorizontal: space.gutter, paddingTop: 6 },
     dim: { color: colors.ink40 },

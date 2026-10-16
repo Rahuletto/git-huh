@@ -11,6 +11,7 @@ import {
   View,
 } from 'react-native';
 
+import { FormScrollView } from '../components/FormScrollView';
 import { Composer } from '../components/Composer';
 import { OverlayFrame, SavedNote } from '../components/Overlay';
 import { Body, Label, Micro } from '../components/Type';
@@ -349,7 +350,7 @@ function Editor({
   };
 
   return (
-    <ScrollView
+    <FormScrollView
       contentContainerStyle={styles.editPage}
       keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={false}
@@ -417,7 +418,7 @@ function Editor({
         {phase.kind === 'failed' && <Micro style={styles.failed}>{phase.note}</Micro>}
         {phase.kind === 'sent' && <Micro style={styles.sent}>{phase.note}</Micro>}
       </View>
-    </ScrollView>
+    </FormScrollView>
   );
 }
 

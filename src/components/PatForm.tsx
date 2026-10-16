@@ -3,11 +3,8 @@ import Constants from 'expo-constants';
 import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  KeyboardAvoidingView,
   Linking,
-  Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   TextInput,
   useWindowDimensions,
@@ -30,6 +27,7 @@ import { colors, fonts, radii, space, themed } from '../theme';
 
 import { DotField } from './DotField';
 import { Body, Display, Label, Micro, Serif } from './Type';
+import { FormScrollView } from './FormScrollView';
 import { Wordmark } from './Wordmark';
 
 interface PatFormProps {
@@ -150,10 +148,7 @@ export function PatForm({ onTokenVerified, onCancel }: PatFormProps) {
 
   return (
     <SafeAreaView style={styles.screen}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.fill}
-      >
+      <View style={styles.fill}>
         <View style={styles.header}>
           <Wordmark size={20} />
           {onCancel ? (
@@ -165,7 +160,7 @@ export function PatForm({ onTokenVerified, onCancel }: PatFormProps) {
           )}
         </View>
 
-        <ScrollView
+        <FormScrollView
           contentContainerStyle={styles.center}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
@@ -281,8 +276,8 @@ export function PatForm({ onTokenVerified, onCancel }: PatFormProps) {
               </>
             )}
           </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+        </FormScrollView>
+      </View>
     </SafeAreaView>
   );
 }

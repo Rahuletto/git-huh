@@ -48,7 +48,7 @@ export function HostScreen({ active }: { active: boolean }) {
 
   if (settings === null || editing) {
     return (
-      <Page blocks>
+      <Page blocks keyboard>
         <Block>
           <ScreenHead left="host" right={settings ? 'change' : 'not connected'} />
           {settings === null && <HostIntro active={active} />}

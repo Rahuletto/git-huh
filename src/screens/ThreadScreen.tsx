@@ -2,13 +2,13 @@ import { useMemo, useState } from 'react';
 import {
   Linking,
   Pressable,
-  ScrollView,
   StyleSheet,
   TextInput,
   useWindowDimensions,
   View,
 } from 'react-native';
 
+import { FormScrollView } from '../components/FormScrollView';
 import { CommentTools, type Verb } from '../components/CommentTools';
 import { Composer } from '../components/Composer';
 import { Details } from '../components/Details';
@@ -105,7 +105,7 @@ export function ThreadScreen({
       )}
 
       {thread && (
-        <ScrollView
+        <FormScrollView
           contentContainerStyle={styles.page}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
@@ -334,7 +334,7 @@ export function ThreadScreen({
             }}
             placeholder={type === 'issue' ? 'leave a comment' : 'write a reply'}
           />
-        </ScrollView>
+        </FormScrollView>
       )}
     </OverlayFrame>
   );

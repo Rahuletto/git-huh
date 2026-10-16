@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
-import { Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Linking, Pressable, StyleSheet, View } from 'react-native';
 
+import { FormScrollView } from '../components/FormScrollView';
 import { Composer } from '../components/Composer';
 import { IconPill } from '../components/Icon';
 import { OverlayFrame, SavedNote } from '../components/Overlay';
@@ -54,7 +55,7 @@ export function GistsScreen({ login }: { login?: string }) {
   return (
     <OverlayFrame onBack={nav.close} where={mine ? 'your gists' : `~${login} · gists`}>
       {state.status === 'ready' && <SavedNote offline={state.offline} savedAt={state.savedAt} />}
-      <ScrollView contentContainerStyle={styles.page} showsVerticalScrollIndicator={false}>
+      <FormScrollView contentContainerStyle={styles.page} showsVerticalScrollIndicator={false}>
         {mine && (
           <Pressable
             accessibilityRole="button"
@@ -90,7 +91,7 @@ export function GistsScreen({ login }: { login?: string }) {
               {gist.description ? <Body numberOfLines={2} style={styles.body}>{gist.description}</Body> : null}
             </Pressable>
           ))}
-      </ScrollView>
+      </FormScrollView>
     </OverlayFrame>
   );
 }
@@ -119,7 +120,7 @@ export function GistScreen({ id }: { id: string }) {
       {state.status === 'loading' && <Label style={styles.note}>opening the gist…</Label>}
       {state.status === 'error' && <Label style={styles.error}>could not open this gist</Label>}
       {gist && (
-        <ScrollView contentContainerStyle={styles.page} showsVerticalScrollIndicator={false}>
+        <FormScrollView contentContainerStyle={styles.page} showsVerticalScrollIndicator={false}>
           <Heading style={styles.heading}>{gist.description || gist.files[0] || gist.id}</Heading>
           <Micro style={styles.meta}>
             {gist.public ? 'public' : 'secret'} · updated {ago(gist.updatedAt)}
@@ -163,7 +164,7 @@ export function GistScreen({ id }: { id: string }) {
               style={styles.link}
             />
           )}
-        </ScrollView>
+        </FormScrollView>
       )}
     </OverlayFrame>
   );

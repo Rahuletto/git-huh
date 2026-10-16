@@ -2,13 +2,13 @@ import { useMemo, useState } from 'react';
 import {
   Linking,
   Pressable,
-  ScrollView,
   StyleSheet,
   TextInput,
   useWindowDimensions,
   View,
 } from 'react-native';
 
+import { FormScrollView } from '../components/FormScrollView';
 import { Composer } from '../components/Composer';
 import { Icon, IconButton, IconPill } from '../components/Icon';
 import { Markdown } from '../components/Markdown';
@@ -103,7 +103,7 @@ export function RepoScreen({ repo, initialTab }: { repo: string; initialTab?: Re
       where={repo}
     >
       {info.status === 'ready' && <SavedNote offline={info.offline} savedAt={info.savedAt} />}
-      <ScrollView
+      <FormScrollView
         contentContainerStyle={styles.page}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
@@ -180,7 +180,7 @@ export function RepoScreen({ repo, initialTab }: { repo: string; initialTab?: Re
         {tab === 'releases' && <Releases info={repoInfo} repo={repo} />}
         {tab === 'discussions' && <Discussions info={repoInfo} repo={repo} />}
         {tab === 'security' && <Security info={repoInfo} repo={repo} />}
-      </ScrollView>
+      </FormScrollView>
     </OverlayFrame>
   );
 }

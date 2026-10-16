@@ -3,12 +3,12 @@ import {
   BackHandler,
   Linking,
   Pressable,
-  ScrollView,
   StyleSheet,
   TextInput,
   useWindowDimensions,
   View,
 } from 'react-native';
+import { FormScrollView } from '../components/FormScrollView';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ChecksPanel } from '../components/ChecksPanel';
@@ -145,7 +145,7 @@ export function PullScreen({ repo, number, initialTab = 'brief', sequence }: Pul
             onSelect={(index) => setTab(TABS[index][0])}
           />
 
-          <ScrollView
+          <FormScrollView
             contentContainerStyle={styles.page}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
@@ -247,7 +247,7 @@ export function PullScreen({ repo, number, initialTab = 'brief', sequence }: Pul
               </>
             )}
             {tab === 'checks' && <ChecksPanel repo={repo} sha={pull.headSha} />}
-          </ScrollView>
+          </FormScrollView>
 
           <View style={styles.footer}>
             <Squiggle

@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react';
-import { ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { StyleSheet, TextInput, View } from 'react-native';
 
+import { FormScrollView } from '../components/FormScrollView';
 import { Composer } from '../components/Composer';
 import { OverlayFrame } from '../components/Overlay';
 import { Label, Micro } from '../components/Type';
@@ -35,13 +36,13 @@ function Form({ where, children }: { where: string; children: ReactNode }) {
   const nav = useNav();
   return (
     <OverlayFrame onBack={nav.close} where={where}>
-      <ScrollView
+      <FormScrollView
         contentContainerStyle={styles.page}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
         {children}
-      </ScrollView>
+      </FormScrollView>
     </OverlayFrame>
   );
 }

@@ -399,6 +399,14 @@ and do not run `expo prebuild` without checking what it would overwrite.
 
 ## Design rules
 
+**Fields must stay above the keyboard.** The root has `KeyboardProvider`;
+vertical pages containing inputs, pickers or composers use `FormScrollView`
+(`react-native-keyboard-controller`), which follows focus and the caret as
+multiline text grows. Shared `Page` takes `keyboard` for forms such as host
+setup. Do not nest another keyboard-avoiding view around it. Test a field
+near the bottom, moving focus with the keyboard open, and long multiline text
+on the emulator. The controller is native, so dependency changes need a rebuild.
+
 **The app is the widget, zoomed out** (`design/LANGUAGE.md` §1). One face —
 IBM Plex Mono in every role, `src/components/Type.tsx` — one ink in four
 weights on the widget's warm near-black card, and every chart built from the

@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
+import { FormScrollView } from '../components/FormScrollView';
 import { OverlayFrame } from '../components/Overlay';
 import { Body, Data, Label, Micro } from '../components/Type';
 import { useRemote } from '../hooks/useRemote';
@@ -63,7 +64,7 @@ export function SearchScreen({ query }: { query?: string }) {
 
   return (
     <OverlayFrame onBack={nav.close} where="search github">
-      <ScrollView
+      <FormScrollView
         contentContainerStyle={styles.page}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
@@ -105,7 +106,7 @@ export function SearchScreen({ query }: { query?: string }) {
             ))}
           </>
         )}
-      </ScrollView>
+      </FormScrollView>
     </OverlayFrame>
   );
 }

@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, TextInput, useWindowDimensions, View } from 'react-native';
+import { Pressable, StyleSheet, TextInput, useWindowDimensions, View } from 'react-native';
 
+import { FormScrollView } from '../components/FormScrollView';
 import { Markdown } from '../components/Markdown';
 import { OverlayFrame } from '../components/Overlay';
 import { Body, Heading, Label, Micro } from '../components/Type';
@@ -53,7 +54,7 @@ export function NewIssueScreen({ repo }: { repo: string }) {
       where={`${repo} · new issue`}
     >
       {!chosen && (
-        <ScrollView contentContainerStyle={styles.page} showsVerticalScrollIndicator={false}>
+        <FormScrollView contentContainerStyle={styles.page} showsVerticalScrollIndicator={false}>
           <Heading style={styles.heading}>What kind of issue?</Heading>
           {templates.status === 'loading' && <Label style={styles.note}>reading the templates…</Label>}
           {[...(templates.status === 'ready' ? templates.data : []), BLANK].map((template) => (
@@ -68,7 +69,7 @@ export function NewIssueScreen({ repo }: { repo: string }) {
               {template.kind === 'form' && <Micro style={styles.kind}>form</Micro>}
             </Pressable>
           ))}
-        </ScrollView>
+        </FormScrollView>
       )}
       {chosen && (
         <Fill
@@ -126,7 +127,7 @@ function Fill({
     setAnswers((current) => ({ ...current, [id]: value }));
 
   return (
-    <ScrollView
+    <FormScrollView
       contentContainerStyle={styles.page}
       keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={false}
@@ -184,7 +185,7 @@ function Fill({
       {missing.length > 0 && <Micro style={styles.missing}>still needed: {missing.join(' · ')}</Micro>}
       {phase.kind === 'failed' && <Micro style={styles.failed}>{phase.note}</Micro>}
       {phase.kind === 'sent' && <Micro style={styles.sent}>{phase.note}</Micro>}
-    </ScrollView>
+    </FormScrollView>
   );
 }
 

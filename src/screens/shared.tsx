@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { IconButton, type Glyph } from '../components/Icon';
+import { FormScrollView } from '../components/FormScrollView';
 import { Label } from '../components/Type';
 import type { GitHubModel } from '../lib/contributions';
 import { GitHubError } from '../lib/github';
@@ -148,6 +149,7 @@ export function Page({
   onEnd,
   onDeep,
   blocks = false,
+  keyboard = false,
 }: {
   children: ReactNode;
   background?: string;
@@ -171,10 +173,13 @@ export function Page({
   onDeep?: () => void;
   /** Blocks rather than cards: a section's page spaces its blocks wider. */
   blocks?: boolean;
+  /** Forms need to scroll their focused field above the keyboard. */
+  keyboard?: boolean;
 }) {
   const watch = onEnd != null || onDeep != null;
+  const Scroll = keyboard ? FormScrollView : ScrollView;
   return (
-    <ScrollView
+    <Scroll
       onScroll={
         watch
           ? ({ nativeEvent: { contentOffset, contentSize, layoutMeasurement } }) => {
@@ -196,7 +201,7 @@ export function Page({
       style={background ? { backgroundColor: background } : undefined}
     >
       {children}
-    </ScrollView>
+    </Scroll>
   );
 }
 
