@@ -16,7 +16,7 @@ import { OverlayFrame, SavedNote } from '../components/Overlay';
 import { Body, Label, Micro } from '../components/Type';
 import { useRemote } from '../hooks/useRemote';
 import { demoFile, demoRepoInfo } from '../lib/demo';
-import { useNav } from '../lib/nav';
+import { pullRoute, useNav } from '../lib/nav';
 import { explain } from '../lib/rest';
 import { fetchFile, fetchRepoInfo, type RepoFile } from '../lib/repo';
 import {
@@ -150,7 +150,7 @@ export function FileScreen({
           onCancel={() => setEditing(false)}
           onDone={(result) => {
             if (result.kind === 'pull') {
-              nav.replace({ kind: 'pull', repo: result.repo, number: result.number });
+              nav.replace(pullRoute(result));
             } else {
               setEditing(false);
               state.reload();

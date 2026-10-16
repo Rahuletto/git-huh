@@ -134,11 +134,14 @@ cd android
 It signs with `GITHUH_UPLOAD_*` from `~/.gradle/gradle.properties` if you
 have set them, and with the debug key if you have not.
 
-**Sign in with GitHub** needs an OAuth app. [Register one](https://github.com/settings/applications/new)
-(any homepage and callback URL; neither is used), tick **Enable Device
-Flow**, and put its client id in `app.json` → `expo.extra.githubClientId`. A
-client id is not a secret, and no secret is needed. With the field empty the
-sign-in page offers the token field alone.
+**Sign in with GitHub** is configured for the official `git-huh` OAuth app.
+For your own distribution, [register an OAuth app](https://github.com/settings/applications/new),
+enable **Device Flow**, disable **Expire user access tokens** (refresh tokens
+are not supported yet), and put its client id in `app.json` →
+`expo.extra.githubClientId`. The homepage and callback can point to your
+repository; the device flow does not use the callback. A client id is public,
+and no client secret is needed. With the field empty the sign-in page offers
+the token field alone.
 
 Checks:
 

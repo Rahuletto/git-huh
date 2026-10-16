@@ -3,9 +3,10 @@
  * its CPU, memory and disks, the services it was told to watch, their logs,
  * and whatever panels its config defines.
  *
- * The app knows nothing about any particular service. It reads the manifest
- * and the overview and draws the kinds it is given (`PanelKind`), so a new
- * graph on the phone is a few lines in the host's JSON, never a new build.
+ * The app knows nothing about any particular service. It reads the overview
+ * and draws the Views it is given (`PanelKind`), so a new graph on the phone
+ * is a few lines in the host's config, never a new build. The wire format is
+ * protobuf (`src/gen`, from `proto/`); `hostProto.ts` turns it into these.
  *
  * Pure: no React Native, so the shaping and the formatting are tested on Node.
  */
@@ -22,7 +23,8 @@ export interface PanelMeta {
   every: number;
   history: boolean;
   max: number | null;
-  endpoint: string;
+  /** `scope/source/view`: what SourceService.ReadSource reads again. */
+  key: string;
 }
 
 export type PanelValue =
@@ -82,6 +84,8 @@ export interface ServiceDetail extends ServiceState {
 export interface Overview {
   name: string;
   every: number;
+  /** Set when the host's config on disk failed to load; the last good one runs. */
+  configError?: string | null;
   host: {
     at: number;
     cpu: number;
@@ -315,7 +319,7 @@ function meta(id: string, title: string, kind: PanelKind, unit = ''): PanelMeta 
     every: 60,
     history: kind === 'series',
     max: null,
-    endpoint: `/v1/panels/host/${id}`,
+    key: `host/${id}/${id}`,
   };
 }
 
@@ -349,11 +353,11 @@ export function demoServiceDetail(id: string): ServiceDetail {
     every: 10,
     series: { ...base.series, memory: wave(120, 180 * 2 ** 20, 20 * 2 ** 20, 2) },
     panels: [
-      { ...meta('watchers', 'watchers', 'stat'), endpoint: `/v1/panels/${id}/watchers`, value: 126 },
-      { ...meta('failing', 'failing now', 'series'), endpoint: `/v1/panels/${id}/failing`, value: 2, series: wave(60, 1, 1.5, 7) },
+      { ...meta('watchers', 'watchers', 'stat'), key: `${id}/watchers/watchers`, value: 126 },
+      { ...meta('failing', 'failing now', 'series'), key: `${id}/failing/failing`, value: 2, series: wave(60, 1, 1.5, 7) },
       {
         ...meta('by-status', 'by last status', 'bars'),
-        endpoint: `/v1/panels/${id}/by-status`,
+        key: `${id}/by-status/by-status`,
         value: [
           { label: 'ok', value: 124 },
           { label: 'fetch_error', value: 2 },
@@ -361,12 +365,12 @@ export function demoServiceDetail(id: string): ServiceDetail {
       },
       {
         ...meta('status', 'through tailscale', 'status'),
-        endpoint: `/v1/panels/${id}/status`,
+        key: `${id}/status/status`,
         value: { ok: true, text: 'the site' },
       },
       {
         ...meta('recent', 'recent', 'list'),
-        endpoint: `/v1/panels/${id}/recent`,
+        key: `${id}/recent/recent`,
         value: ['2h · new listing on the watched page', '1d · price changed'],
       },
     ],

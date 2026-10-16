@@ -93,8 +93,8 @@ android {
         applicationId 'app.githuh'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 38
-        versionName "0.0.10-alpha"
+        versionCode 39
+        versionName "0.0.11-alpha"
 
         buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""
     }

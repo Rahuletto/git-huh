@@ -6,7 +6,7 @@ import type {
   RepoNode,
   YearStats,
 } from './github';
-import type { Activity, CommitSample, PullDetail } from './activity';
+import type { Activity, CommitSample, PullActivity } from './activity';
 import { parsePatch, type PullDetailFull } from './pullDetail';
 import type { PullRequest } from './prs';
 import type { SocialEvent } from './social';
@@ -411,7 +411,7 @@ export function demoActivity(): Activity {
   }
 
   const now = Date.parse('2026-09-21T09:00:00Z');
-  const pulls: PullDetail[] = demoPullRequests.map((pr, index) => {
+  const pulls: PullActivity[] = demoPullRequests.map((pr, index) => {
     const openedAt = Date.parse(pr.createdAt);
     const merged = index % 3 !== 0;
     const cycle = (3 + random() * 90) * 3_600_000;
@@ -663,7 +663,7 @@ export function demoPullDetail(repo: string, number: number): PullDetailFull {
     canUpdate: true,
     canUpdateBranch: true,
     permission: repo.startsWith(`${DEMO_LOGIN}/`) ? 'ADMIN' : 'WRITE',
-    subscription: 'SUBSCRIBED',
+    unavailable: {},
     locked: false,
     headRepo: repo,
     headRefExists: true,

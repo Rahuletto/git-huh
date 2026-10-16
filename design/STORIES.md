@@ -95,7 +95,8 @@ one keeps those endings inside.
     big files start folded. → `pull` → `files`.
 14. **I want to skim my own descriptions one after another** without going back
     to a list each time. → `work` → `the brief` → `read all in order`, paged
-    from a bar pinned to the bottom.
+    from a bar pinned to the bottom of the same `pull` page used by comments,
+    links and notifications. No second reader or extra tap to reach the conversation.
 15. **I want to know how long my pull requests actually take**, because the
     number I say out loud is wrong. → `cycle`.
 16. **I want my repositories ordered by when a commit was last written in

@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import { toISODate } from './contributions';
 import { executeQuery } from './github';
+import { PULL_SUMMARY_FIELDS, pullSummarySchema, toPullSummary, type PullSummary } from './pullRequest';
 import type { CommitLine } from './messageCache';
 
 /**
@@ -45,26 +46,10 @@ const historySchema = z.object({
     .nullable(),
 });
 
-const pullSchema = z.object({
-  number: z.number().int(),
-  title: z.string(),
-  url: z.string(),
-  body: z.string(),
-  state: z.string(),
-  isDraft: z.boolean(),
-  createdAt: z.string(),
+const pullSchema = pullSummarySchema.extend({
   closedAt: z.string().nullable(),
-  mergedAt: z.string().nullable(),
-  additions: z.number().int().nonnegative(),
-  deletions: z.number().int().nonnegative(),
-  changedFiles: z.number().int().nonnegative(),
-  reviewDecision: z.string().nullable(),
   repository: z.object({ nameWithOwner: z.string() }),
-  labels: z
-    .object({ nodes: z.array(z.object({ name: z.string(), color: z.string() })) })
-    .nullable(),
   comments: z.object({ totalCount: z.number().int().nonnegative() }),
-  commits: z.object({ totalCount: z.number().int().nonnegative() }),
   reviews: z
     .object({
       nodes: z.array(
@@ -94,30 +79,16 @@ export interface CommitSample {
   message: string;
 }
 
-export interface PullDetail {
-  number: number;
-  title: string;
-  url: string;
-  body: string;
-  repo: string;
-  state: 'OPEN' | 'MERGED' | 'CLOSED';
-  isDraft: boolean;
-  createdAt: string;
-  mergedAt: string | null;
+/** A sampled PR for charts and list previews, never a second detail page. */
+export interface PullActivity extends PullSummary {
   closedAt: string | null;
-  additions: number;
-  deletions: number;
-  changedFiles: number;
-  commits: number;
   comments: number;
-  reviewDecision: string | null;
   firstReviewAt: string | null;
-  labels: { name: string; color: string }[];
 }
 
 export interface Activity {
   commits: CommitSample[];
-  pulls: PullDetail[];
+  pulls: PullActivity[];
 }
 
 export const EMPTY_ACTIVITY: Activity = { commits: [], pulls: [] };
@@ -134,23 +105,10 @@ function query(login: string): string {
       ) {
         nodes {
           ... on PullRequest {
-            number
-            title
-            url
-            body
-            state
-            isDraft
-            createdAt
+            ${PULL_SUMMARY_FIELDS}
             closedAt
-            mergedAt
-            additions
-            deletions
-            changedFiles
-            reviewDecision
             repository { nameWithOwner }
-            labels(first: 6) { nodes { name color } }
             comments { totalCount }
-            commits { totalCount }
             reviews(first: 1) { nodes { submittedAt state } }
           }
         }
@@ -223,32 +181,17 @@ export async function fetchActivity(
     }
   }
 
-  const pulls: PullDetail[] = [];
+  const pulls: PullActivity[] = [];
   for (const raw of data.prs.nodes) {
     const node = pullSchema.safeParse(raw);
     // The search union can return issues too; skip anything that is not a PR.
     if (!node.success) continue;
     const pr = node.data;
     pulls.push({
-      number: pr.number,
-      title: pr.title,
-      url: pr.url,
-      body: pr.body,
-      repo: pr.repository.nameWithOwner,
-      state:
-        pr.state === 'MERGED' ? 'MERGED' : pr.state === 'CLOSED' ? 'CLOSED' : 'OPEN',
-      isDraft: pr.isDraft,
-      createdAt: pr.createdAt,
-      mergedAt: pr.mergedAt,
+      ...toPullSummary(pr, pr.repository.nameWithOwner),
       closedAt: pr.closedAt,
-      additions: pr.additions,
-      deletions: pr.deletions,
-      changedFiles: pr.changedFiles,
-      commits: pr.commits.totalCount,
       comments: pr.comments.totalCount,
-      reviewDecision: pr.reviewDecision,
       firstReviewAt: pr.reviews?.nodes[0]?.submittedAt ?? null,
-      labels: pr.labels?.nodes ?? [],
     });
   }
 
@@ -303,7 +246,7 @@ export interface CycleStats {
 
 const HOUR = 3_600_000;
 
-export function cycleStats(pulls: PullDetail[]): CycleStats {
+export function cycleStats(pulls: PullActivity[]): CycleStats {
   const cycleHours: number[] = [];
   const waits: number[] = [];
   let merged = 0;

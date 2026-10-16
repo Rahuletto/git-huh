@@ -1,3 +1,4 @@
+import { pullRoute } from '../lib/nav';
 import { memo, useCallback } from 'react';
 
 import { useSession } from '../shell/session';
@@ -31,7 +32,7 @@ export function WorkScreen() {
   const loading = activityState.status !== 'ready';
   const openPull = useCallback(
     (pr: { repo: string; number: number }) =>
-      nav.open({ kind: 'pull', repo: pr.repo, number: pr.number }),
+      nav.open(pullRoute(pr)),
     [nav],
   );
 

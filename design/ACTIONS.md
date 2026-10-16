@@ -149,4 +149,6 @@ added.
 The token form and the OAuth device flow ask for: `read:user`, `repo`,
 `read:discussion`, `write:discussion`, `security_events`, `user:follow`,
 `gist`. Each screen still works with fewer scopes. When a write is refused,
-the composer says the token needs more scope instead of a generic failure.
+the composer preserves GitHub's reason instead of assuming every refusal means
+a missing scope. PR descriptions remain readable when supplemental data is
+refused; the affected section names the failure and offers retry.

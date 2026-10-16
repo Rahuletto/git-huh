@@ -2,7 +2,7 @@
   "expo": {
     "name": "git-huh?",
     "slug": "git-huh",
-    "version": "0.0.10-alpha",
+    "version": "0.0.11-alpha",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "scheme": "githuh",
@@ -39,7 +39,7 @@
       "backgroundColor": "#F2F0EB"
     },
     "extra": {
-      "githubClientId": ""
+      "githubClientId": "Ov23li13lwi8g85z5tXV"
     }
   }
 }

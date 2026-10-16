@@ -1,6 +1,7 @@
 import { createContext, useContext } from 'react';
 
 import type { ShareKind } from './shareData';
+import type { PullRef } from './pullRequest';
 
 /**
  * Everything that opens *over* the sections: a pull request, an issue or a
@@ -26,8 +27,23 @@ export const REPO_TABS = [
 ] as const;
 export type RepoTab = (typeof REPO_TABS)[number];
 
+export type PullTab = 'brief' | 'talk' | 'diff' | 'checks';
+export interface PullRoute extends PullRef {
+  kind: 'pull';
+  tab?: PullTab;
+  /** Browsing a list adds paging to the ordinary PR page, never another reader. */
+  sequence?: readonly PullRef[];
+}
+
+export function pullRoute(pull: PullRef, sequence?: readonly PullRef[]): PullRoute {
+  return {
+    kind: 'pull', repo: pull.repo, number: pull.number,
+    ...(sequence ? { sequence: sequence.map(({ repo, number }) => ({ repo, number })) } : {}),
+  };
+}
+
 export type Route =
-  | { kind: 'pull'; repo: string; number: number }
+  | PullRoute
   | { kind: 'thread'; repo: string; number: number; type: 'issue' | 'discussion' }
   | { kind: 'repo'; repo: string; tab?: RepoTab }
   | {
@@ -64,8 +80,6 @@ export type Route =
   | { kind: 'queue' }
   /** Everything assigned to you, and the issues you filed. */
   | { kind: 'assigned' }
-  /** Your pull requests' descriptions, read one after another. */
-  | { kind: 'brief' }
   /** Everyone you reviewed with this year. */
   | { kind: 'people' }
   /** The whole inbox feed, from its head on `work`. */
@@ -161,8 +175,14 @@ export function routeForUrl(url: string): Route | null {
   if (!section) return { kind: 'repo', repo };
   const number = Number(rest[0]);
   switch (section) {
-    case 'pull':
-      return Number.isInteger(number) && number > 0 ? { kind: 'pull', repo, number } : null;
+    case 'pull': {
+      if (!Number.isInteger(number) || number <= 0) return null;
+      const route = pullRoute({ repo, number });
+      if (/#(?:issuecomment-|discussion_r|pullrequestreview-)/.test(url)) route.tab = 'talk';
+      else if (rest[1] === 'files') route.tab = 'diff';
+      else if (rest[1] === 'checks') route.tab = 'checks';
+      return route;
+    }
     case 'issues':
       if (rest[0] === 'new') return { kind: 'new-issue', repo };
       return Number.isInteger(number) && number > 0

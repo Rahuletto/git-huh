@@ -1,0 +1,104 @@
+syntax = "proto3";
+
+package hostd.v1;
+
+import "google/protobuf/any.proto";
+import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
+import "hostd/v1/collector.proto";
+import "hostd/v1/view.proto";
+
+// SourceService is every data source registered in the server's config: a
+// collector, its parameters, and the Views shaped from what it returns.
+//
+// A source's reading carries the collector's own data three ways: a typed
+// payload (an Any, for clients compiled with its message; the server serves
+// gRPC reflection so others can decode it), the same data as plain JSON
+// values, and the Views a generic client draws.
+service SourceService {
+  // Every registered collector and every source configured on top of one.
+  rpc ListSources(ListSourcesRequest) returns (ListSourcesResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // A source's latest reading, or a fresh one.
+  rpc ReadSource(ReadSourceRequest) returns (ReadSourceResponse);
+  // Each new reading of a source as it is taken.
+  rpc WatchSource(WatchSourceRequest) returns (stream WatchSourceResponse);
+  // Runs one of the actions a collector offers, if the source allows it.
+  rpc RunSourceAction(RunSourceActionRequest) returns (RunSourceActionResponse);
+}
+
+message ListSourcesRequest {}
+
+message ListSourcesResponse {
+  repeated CollectorInfo collectors = 1;
+  repeated SourceInfo sources = 2;
+}
+
+message CollectorInfo {
+  // e.g. "http", "command", or an external collector's own id.
+  string id = 1;
+  string about = 2;
+  // "builtin" or "external".
+  string kind = 3;
+  // The full names of the messages it puts in a payload.
+  repeated string payload_types = 4;
+  repeated CollectorAction actions = 5;
+  // Set when an external collector could not be reached.
+  string error = 6;
+}
+
+message SourceInfo {
+  // "host" or a service id.
+  string scope = 1;
+  string id = 2;
+  string collector = 3;
+  int32 every_seconds = 4;
+  repeated string view_ids = 5;
+  repeated CollectorAction actions = 6;
+}
+
+message ReadSourceRequest {
+  string scope = 1;
+  string id = 2;
+  // Read it now instead of returning the last reading.
+  bool fresh = 3;
+  // History points per series (default 120).
+  int32 points = 4;
+}
+
+message ReadSourceResponse {
+  Reading reading = 1;
+}
+
+message Reading {
+  string scope = 1;
+  string source_id = 2;
+  google.protobuf.Timestamp at = 3;
+  // The collector's typed message, when it has one.
+  google.protobuf.Any payload = 4;
+  // The same data as JSON values: what the config's shaping rules read.
+  google.protobuf.Value data = 5;
+  repeated View views = 6;
+  string error = 7;
+}
+
+message WatchSourceRequest {
+  string scope = 1;
+  string id = 2;
+  int32 points = 3;
+}
+
+message WatchSourceResponse {
+  Reading reading = 1;
+}
+
+message RunSourceActionRequest {
+  string scope = 1;
+  string id = 2;
+  string action_id = 3;
+}
+
+message RunSourceActionResponse {
+  string detail = 1;
+}

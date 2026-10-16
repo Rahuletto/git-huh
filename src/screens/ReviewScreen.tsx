@@ -5,8 +5,8 @@ import { Card } from '../components/Card';
 import { dot } from '../components/DotField';
 
 import { Data, Heading, Label } from '../components/Type';
-import { cycleStats, type Activity, type PullDetail } from '../lib/activity';
-import { useNav } from '../lib/nav';
+import { cycleStats, type Activity, type PullActivity } from '../lib/activity';
+import { pullRoute, useNav } from '../lib/nav';
 import { colors, space, themed } from '../theme';
 import { Block, ScreenHead } from './shared';
 
@@ -44,7 +44,7 @@ export function ReviewScreen({
     .sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt))
     .slice(-14);
 
-  const hoursOf = (pr: PullDetail) =>
+  const hoursOf = (pr: PullActivity) =>
     (Date.parse(pr.mergedAt ?? pr.createdAt) - Date.parse(pr.createdAt)) / 3_600_000;
   const longest = Math.max(1, ...rows.map(hoursOf));
   const median = stats.medianCycleHours;
@@ -93,7 +93,7 @@ export function ReviewScreen({
                   accessibilityLabel={`${pr.repo} number ${pr.number}, open ${duration(hours)}`}
                   accessibilityRole="button"
                   key={`${pr.repo}#${pr.number}`}
-                  onPress={() => nav.open({ kind: 'pull', repo: pr.repo, number: pr.number })}
+                  onPress={() => nav.open(pullRoute(pr))}
                   style={styles.row}
                 >
                   <Data numberOfLines={1} style={styles.number}>

@@ -266,6 +266,12 @@ also accessibility actions on the row, and the words `done` and `snooze`
 are printed under the row so the gesture announces itself before it
 commits.
 
+**One object, one detail page.** Lists may fetch summaries in batches, but every
+entry point opens the same detail route, loader, cache and renderer. Paging
+through a list adds previous/next to that page; it does not create another
+reader. Optional data failures stay in the affected section with their reason
+and a retry action. They never turn readable content into a full-page error.
+
 **Detail pushes; sections do not.** A pull request, a thread, a repository,
 a file: each one pushes over what is there with `← back`, and back pops it.
 Nothing in the bar ever pushes.

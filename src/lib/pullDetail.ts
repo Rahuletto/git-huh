@@ -1,23 +1,15 @@
 import { z } from 'zod';
 
-import { executeQuery } from './github';
+import { executeQuery, GitHubError } from './github';
+import { optionalRead, type ReadFailure } from './optionalRead';
+import { PULL_SUMMARY_FIELDS, pullSummarySchema, toPullSummary, type PullSummary } from './pullRequest';
 import { REACTION_FIELDS, reactionGroupsSchema, toReactions, type Reaction } from './reactions';
 import { rest } from './rest';
 
 /**
- * One pull request, opened.
- *
- * Everything else in the app lists pull requests; this reads one — the
- * description, the conversation and the actual diff. Two requests, because
- * the two halves live in different APIs:
- *
- *  - GraphQL for the object and its talk. Review *threads* matter as much as
- *    top-level comments: the line someone objected to is the review.
- *  - REST for the files, because GraphQL's `files` connection carries paths
- *    and counts but no patch text, and a diff without the lines is a table.
- *
- * Both are capped. A pull request can have a thousand changed files and
- * nobody reads a thousand files on a phone.
+ * The single detail loader for every PR entry point. The core is required;
+ * conversation, management details and patches fail independently and carry
+ * their errors to the UI. A forbidden extra must never hide a readable PR.
  */
 
 const FILE_LIMIT = 20;
@@ -83,31 +75,16 @@ export interface DiffFile {
   hasPatch: boolean;
 }
 
-export interface PullDetailFull {
+export interface PullDetailFull extends PullSummary {
   /** Node id — what a reply or a review is attached to. */
   id: string;
   /** The head commit: where line comments land and where checks ran. */
   headSha: string;
   /** GitHub will not let you approve your own pull request. */
   viewerIsAuthor: boolean;
-  number: number;
-  title: string;
-  url: string;
-  body: string;
-  repo: string;
   author: string;
-  state: 'OPEN' | 'MERGED' | 'CLOSED';
-  isDraft: boolean;
-  createdAt: string;
-  mergedAt: string | null;
   baseRefName: string;
   headRefName: string;
-  additions: number;
-  deletions: number;
-  changedFiles: number;
-  commits: number;
-  reviewDecision: string | null;
-  labels: { name: string; color: string }[];
   assignees: string[];
   /** People asked for a review who have not given one yet. */
   reviewers: string[];
@@ -125,7 +102,6 @@ export interface PullDetailFull {
   canUpdateBranch: boolean;
   /** ADMIN · MAINTAIN · WRITE · TRIAGE · READ. */
   permission: string | null;
-  subscription: string | null;
   locked: boolean;
   /** Where the head branch lives, and whether it still does. */
   headRepo: string | null;
@@ -135,7 +111,10 @@ export interface PullDetailFull {
   files: DiffFile[];
   /** True when the file list was capped at `FILE_LIMIT`. */
   moreFiles: number;
+  unavailable: Partial<Record<PullSection, ReadFailure>>;
 }
+
+export type PullSection = 'conversation' | 'details' | 'files';
 
 const actor = z.object({ login: z.string() }).nullable();
 
@@ -155,87 +134,91 @@ const threadCommentNode = commentNode.extend({
   diffHunk: z.string().nullable(),
 });
 
-const pullSchema = z.object({
-  repository: z
+const coreSchema = pullSummarySchema.extend({
+  id: z.string(),
+  headRefOid: z.string(),
+  viewerDidAuthor: z.boolean(),
+  author: actor,
+  baseRefName: z.string(),
+  headRefName: z.string(),
+  locked: z.boolean(),
+  reactionGroups: reactionGroupsSchema,
+});
+
+const detailsSchema = z.object({
+  assignees: z.object({ nodes: z.array(z.object({ login: z.string() })) }),
+  reviewRequests: z
     .object({
-      pullRequest: z
-        .object({
-          id: z.string(),
-          headRefOid: z.string(),
-          viewerDidAuthor: z.boolean(),
-          number: z.number().int(),
-          title: z.string(),
-          url: z.string(),
-          body: z.string(),
-          state: z.string(),
-          isDraft: z.boolean(),
-          createdAt: z.string(),
-          mergedAt: z.string().nullable(),
-          baseRefName: z.string(),
-          headRefName: z.string(),
-          additions: z.number().int().nonnegative(),
-          deletions: z.number().int().nonnegative(),
-          changedFiles: z.number().int().nonnegative(),
-          reviewDecision: z.string().nullable(),
-          author: actor,
-          labels: z
-            .object({ nodes: z.array(z.object({ name: z.string(), color: z.string() })) })
+      nodes: z.array(
+        z.object({
+          requestedReviewer: z
+            .object({ login: z.string().optional(), slug: z.string().optional() })
             .nullable(),
-          assignees: z.object({ nodes: z.array(z.object({ login: z.string() })) }),
-          reviewRequests: z
-            .object({
-              nodes: z.array(
-                z.object({
-                  requestedReviewer: z
-                    .object({ login: z.string().optional(), slug: z.string().optional() })
-                    .nullable(),
-                }),
-              ),
-            })
-            .nullable(),
-          milestone: z.object({ number: z.number().int(), title: z.string() }).nullable(),
-          mergeable: z.string(),
-          mergeStateStatus: z.string(),
-          viewerCanUpdate: z.boolean(),
-          viewerCanUpdateBranch: z.boolean(),
-          viewerSubscription: z.string().nullable(),
-          locked: z.boolean(),
-          autoMergeRequest: z.object({ enabledAt: z.string().nullable() }).nullable(),
-          headRepository: z.object({ nameWithOwner: z.string() }).nullable(),
-          headRef: z.object({ id: z.string() }).nullable(),
-          reactionGroups: reactionGroupsSchema,
-          repository: z.object({
-            mergeCommitAllowed: z.boolean(),
-            squashMergeAllowed: z.boolean(),
-            rebaseMergeAllowed: z.boolean(),
-            autoMergeAllowed: z.boolean(),
-            viewerPermission: z.string().nullable(),
-          }),
-          commits: z.object({ totalCount: z.number().int().nonnegative() }),
-          comments: z.object({ nodes: z.array(commentNode) }),
-          reviews: z.object({
-            nodes: z.array(
-              commentNode.extend({ state: z.string(), submittedAt: z.string().nullable() }),
-            ),
-          }),
-          reviewThreads: z.object({
-            nodes: z.array(
-              z.object({
-                id: z.string(),
-                isResolved: z.boolean(),
-                viewerCanResolve: z.boolean(),
-                viewerCanUnresolve: z.boolean(),
-                viewerCanReply: z.boolean(),
-                path: z.string().nullable(),
-                comments: z.object({ nodes: z.array(threadCommentNode) }),
-              }),
-            ),
-          }),
-        })
-        .nullable(),
+        }),
+      ),
     })
     .nullable(),
+  milestone: z.object({ number: z.number().int(), title: z.string() }).nullable(),
+  mergeable: z.string(),
+  mergeStateStatus: z.string(),
+  viewerCanUpdate: z.boolean(),
+  viewerCanUpdateBranch: z.boolean(),
+  autoMergeRequest: z.object({ enabledAt: z.string().nullable() }).nullable(),
+  headRepository: z.object({ nameWithOwner: z.string() }).nullable(),
+  headRef: z.object({ id: z.string() }).nullable(),
+  repository: z.object({
+    mergeCommitAllowed: z.boolean(),
+    squashMergeAllowed: z.boolean(),
+    rebaseMergeAllowed: z.boolean(),
+    autoMergeAllowed: z.boolean(),
+    viewerPermission: z.string().nullable(),
+  }),
 });
+
+const conversationSchema = z.object({
+  comments: z.object({ nodes: z.array(commentNode) }),
+  reviews: z.object({
+    nodes: z.array(
+      commentNode.extend({ state: z.string(), submittedAt: z.string().nullable() }),
+    ),
+  }),
+  reviewThreads: z.object({
+    nodes: z.array(
+      z.object({
+        id: z.string(),
+        isResolved: z.boolean(),
+        viewerCanResolve: z.boolean(),
+        viewerCanUnresolve: z.boolean(),
+        viewerCanReply: z.boolean(),
+        path: z.string().nullable(),
+        comments: z.object({ nodes: z.array(threadCommentNode) }),
+      }),
+    ),
+  }),
+});
+
+/** All PR queries use the same identity and strict response validation. */
+async function readPull<T>(
+  token: string, repo: string, number: number, operation: string,
+  fields: string, schema: z.ZodType<T>, signal?: AbortSignal,
+): Promise<T | null> {
+  const [owner, name] = repo.split('/');
+  const data = await executeQuery(token, `
+    query ${operation}($owner: String!, $name: String!, $number: Int!) {
+      repository(owner: $owner, name: $name) {
+        pullRequest(number: $number) { ${fields} }
+      }
+    }
+  `, z.object({ repository: z.object({ pullRequest: schema.nullable() }).nullable() }),
+  signal, { owner, name, number });
+  return data.repository?.pullRequest ?? null;
+}
+
+async function requireSection<T>(read: Promise<T | null>): Promise<T> {
+  const value = await read;
+  if (value == null) throw new GitHubError('missing', 'GitHub did not return this part of the pull request.');
+  return value;
+}
 
 const filesSchema = z.array(
   z.object({
@@ -247,79 +230,58 @@ const filesSchema = z.array(
   }),
 );
 
-function query(owner: string, name: string, number: number): string {
-  return /* GraphQL */ `
-    query Pull {
-      repository(owner: ${JSON.stringify(owner)}, name: ${JSON.stringify(name)}) {
-        pullRequest(number: ${number}) {
-          id
-          headRefOid
-          viewerDidAuthor
-          number
-          title
-          url
-          body
-          state
-          isDraft
-          createdAt
-          mergedAt
-          baseRefName
-          headRefName
-          additions
-          deletions
-          changedFiles
-          reviewDecision
-          author { login }
-          labels(first: 20) { nodes { name color } }
-          assignees(first: 10) { nodes { login } }
-          reviewRequests(first: 10) {
-            nodes { requestedReviewer { ... on User { login } ... on Team { slug } } }
-          }
-          milestone { number title }
-          mergeable
-          mergeStateStatus
-          viewerCanUpdate
-          viewerCanUpdateBranch
-          viewerSubscription
-          locked
-          autoMergeRequest { enabledAt }
-          headRepository { nameWithOwner }
-          headRef { id }
+const CORE_FIELDS = /* GraphQL */ `
+  ${PULL_SUMMARY_FIELDS}
+  id headRefOid viewerDidAuthor author { login }
+  baseRefName headRefName locked
+  ${REACTION_FIELDS}
+`;
+
+const DETAILS_FIELDS = /* GraphQL */ `
+  assignees(first: 10) { nodes { login } }
+  reviewRequests(first: 10) {
+    nodes { requestedReviewer { ... on User { login } ... on Team { slug } } }
+  }
+  milestone { number title }
+  mergeable
+  mergeStateStatus
+  viewerCanUpdate
+  viewerCanUpdateBranch
+  autoMergeRequest { enabledAt }
+  headRepository { nameWithOwner }
+  headRef { id }
+  repository {
+    mergeCommitAllowed squashMergeAllowed rebaseMergeAllowed autoMergeAllowed viewerPermission
+  }
+`;
+
+const CONVERSATION_FIELDS = /* GraphQL */ `
+  comments(last: ${COMMENT_LIMIT}) {
+    nodes {
+      id author { login } body createdAt url viewerCanUpdate viewerCanDelete
+      ${REACTION_FIELDS}
+    }
+  }
+  reviews(last: ${COMMENT_LIMIT}) {
+    nodes { id author { login } body createdAt url state submittedAt ${REACTION_FIELDS} }
+  }
+  reviewThreads(last: ${THREAD_LIMIT}) {
+    nodes {
+      id
+      isResolved
+      viewerCanResolve
+      viewerCanUnresolve
+      viewerCanReply
+      path
+      comments(first: 6) {
+        nodes {
+          id author { login } body createdAt url path diffHunk viewerCanUpdate viewerCanDelete
           ${REACTION_FIELDS}
-          repository {
-            mergeCommitAllowed squashMergeAllowed rebaseMergeAllowed autoMergeAllowed viewerPermission
-          }
-          commits { totalCount }
-          comments(last: ${COMMENT_LIMIT}) {
-            nodes {
-              id author { login } body createdAt url viewerCanUpdate viewerCanDelete
-              ${REACTION_FIELDS}
-            }
-          }
-          reviews(last: ${COMMENT_LIMIT}) {
-            nodes { id author { login } body createdAt url state submittedAt ${REACTION_FIELDS} }
-          }
-          reviewThreads(last: ${THREAD_LIMIT}) {
-            nodes {
-              id
-              isResolved
-              viewerCanResolve
-              viewerCanUnresolve
-              viewerCanReply
-              path
-              comments(first: 6) {
-                nodes {
-                  id author { login } body createdAt url path diffHunk viewerCanUpdate viewerCanDelete
-                  ${REACTION_FIELDS}
-                }
-              }
-            }
-          }
         }
       }
     }
-  `;
-}
+  }
+`;
 
 /**
  * The patch text GitHub sends for one file, turned into numbered lines.
@@ -406,10 +368,7 @@ async function fetchFiles(
   });
 }
 
-/**
- * Everything one pull request has to say. Only the GraphQL half can fail it:
- * the file patches are optional.
- */
+/** Load the same object, with the same failure rules, from every route. */
 export async function fetchPullDetail(
   token: string,
   repo: string,
@@ -417,23 +376,26 @@ export async function fetchPullDetail(
   signal?: AbortSignal,
 ): Promise<PullDetailFull | null> {
   const [owner, name] = repo.split('/');
-  if (!owner || !name) return null;
+  if (!owner || !name || !Number.isInteger(number) || number <= 0) return null;
 
-  const [data, files] = await Promise.all([
-    executeQuery(token, query(owner, name, number), pullSchema, signal),
-    // The diff is the optional half: a token that can read the object but not
-    // the contents still gets a readable conversation.
-    fetchFiles(token, repo, number, signal).catch((error: unknown) => {
-      if (error instanceof Error && error.name === 'AbortError') throw error;
-      return [] as DiffFile[];
-    }),
+  const [pr, conversation, details, patches] = await Promise.all([
+    readPull(token, repo, number, 'Pull', CORE_FIELDS, coreSchema, signal),
+    optionalRead(requireSection(readPull(token, repo, number, 'PullConversation', CONVERSATION_FIELDS, conversationSchema, signal))),
+    optionalRead(requireSection(readPull(token, repo, number, 'PullDetails', DETAILS_FIELDS, detailsSchema, signal))),
+    optionalRead(fetchFiles(token, repo, number, signal)),
   ]);
-
-  const pr = data.repository?.pullRequest;
   if (!pr) return null;
 
+  const talk = conversation.data;
+  const meta = details.data;
+  const files = patches.data ?? [];
+  const unavailable: PullDetailFull['unavailable'] = {};
+  if (conversation.error) unavailable.conversation = conversation.error;
+  if (details.error) unavailable.details = details.error;
+  if (patches.error) unavailable.files = patches.error;
+
   const comments: PullComment[] = [
-    ...pr.comments.nodes.map((node) => ({
+    ...(talk?.comments.nodes ?? []).map((node) => ({
       id: node.id,
       kind: 'comment' as const,
       author: node.author?.login ?? 'ghost',
@@ -448,7 +410,7 @@ export async function fetchPullDetail(
     })),
     // A review with an empty body is just a state change; the chip for it is
     // already on the header, so an empty card would say nothing twice.
-    ...pr.reviews.nodes
+    ...(talk?.reviews.nodes ?? [])
       .filter((node) => node.body.trim().length > 0 || node.state === 'CHANGES_REQUESTED')
       .map((node) => ({
         id: node.id,
@@ -464,7 +426,7 @@ export async function fetchPullDetail(
         canDelete: false,
         reactions: toReactions(node.reactionGroups),
       })),
-    ...pr.reviewThreads.nodes.flatMap((thread) => {
+    ...(talk?.reviewThreads.nodes ?? []).flatMap((thread) => {
       const [head, ...rest] = thread.comments.nodes;
       if (!head) return [];
       return [
@@ -505,53 +467,38 @@ export async function fetchPullDetail(
   ].sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt));
 
   return {
+    ...toPullSummary(pr, repo),
     id: pr.id,
     headSha: pr.headRefOid,
     viewerIsAuthor: pr.viewerDidAuthor,
-    number: pr.number,
-    title: pr.title,
-    url: pr.url,
-    body: pr.body,
-    repo,
     author: pr.author?.login ?? 'ghost',
-    state:
-      pr.state === 'MERGED' ? 'MERGED' : pr.state === 'CLOSED' ? 'CLOSED' : 'OPEN',
-    isDraft: pr.isDraft,
-    createdAt: pr.createdAt,
-    mergedAt: pr.mergedAt,
     baseRefName: pr.baseRefName,
     headRefName: pr.headRefName,
-    additions: pr.additions,
-    deletions: pr.deletions,
-    changedFiles: pr.changedFiles,
-    commits: pr.commits.totalCount,
-    reviewDecision: pr.reviewDecision,
-    labels: pr.labels?.nodes ?? [],
-    assignees: pr.assignees.nodes.map((node) => node.login),
-    reviewers: (pr.reviewRequests?.nodes ?? []).flatMap((node) => {
+    assignees: (meta?.assignees.nodes ?? []).map((node) => node.login),
+    reviewers: (meta?.reviewRequests?.nodes ?? []).flatMap((node) => {
       const who = node.requestedReviewer?.login ?? node.requestedReviewer?.slug;
       return who ? [who] : [];
     }),
-    milestone: pr.milestone,
-    mergeable: pr.mergeable,
-    mergeState: pr.mergeStateStatus,
+    milestone: meta?.milestone ?? null,
+    mergeable: meta?.mergeable ?? 'UNKNOWN',
+    mergeState: meta?.mergeStateStatus ?? 'UNKNOWN',
     mergeMethods: [
-      ...(pr.repository.mergeCommitAllowed ? (['MERGE'] as const) : []),
-      ...(pr.repository.squashMergeAllowed ? (['SQUASH'] as const) : []),
-      ...(pr.repository.rebaseMergeAllowed ? (['REBASE'] as const) : []),
+      ...(meta?.repository.mergeCommitAllowed ? (['MERGE'] as const) : []),
+      ...(meta?.repository.squashMergeAllowed ? (['SQUASH'] as const) : []),
+      ...(meta?.repository.rebaseMergeAllowed ? (['REBASE'] as const) : []),
     ],
-    autoMergeAllowed: pr.repository.autoMergeAllowed,
-    autoMergeOn: pr.autoMergeRequest != null,
-    canUpdate: pr.viewerCanUpdate,
-    canUpdateBranch: pr.viewerCanUpdateBranch,
-    permission: pr.repository.viewerPermission,
-    subscription: pr.viewerSubscription,
+    autoMergeAllowed: meta?.repository.autoMergeAllowed ?? false,
+    autoMergeOn: meta?.autoMergeRequest != null,
+    canUpdate: meta?.viewerCanUpdate ?? false,
+    canUpdateBranch: meta?.viewerCanUpdateBranch ?? false,
+    permission: meta?.repository.viewerPermission ?? null,
     locked: pr.locked,
-    headRepo: pr.headRepository?.nameWithOwner ?? null,
-    headRefExists: pr.headRef != null,
+    headRepo: meta?.headRepository?.nameWithOwner ?? null,
+    headRefExists: meta?.headRef != null,
     reactions: toReactions(pr.reactionGroups),
     comments,
     files,
     moreFiles: Math.max(0, pr.changedFiles - files.length),
+    unavailable,
   };
 }

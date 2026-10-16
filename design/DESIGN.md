@@ -306,20 +306,16 @@ cover on a card (the number, a `StateChip`, the title, `DiffDots`, counts, label
 outlined pills) and the first lines of its description — tapping it opens `pull` — then
 `read all {n} in order →`, which pushes the reader.
 
-The reader is pushed over everything (`work · the brief` in its frame): the same cover,
-then the description under a wavy rule. Where you are is said **once**, in the bar at
-the foot; it also used to sit in a masthead above, which was the same `1 / 5` twice.
+`read all` opens the ordinary `pull` page with a sequence of PR identities.
+There is no separate Brief reader: the header, full Markdown description,
+conversation, files, checks, cache and errors are the same from every entry point.
+The shared `PullHeader` also draws the tile's preview; activity data is a list
+sample, not another detail model.
 
-The description is **rendered, not printed** (`components/Markdown`). GitHub hands back raw
-Markdown, and verbatim a heading arrives as a literal `## Problem` and a list as a column of
-hyphens. The renderer is deliberately partial — headings,
-lists, task lists, quotes, fenced code, rules, and inline code / bold / italic / links — and
-anything it does not recognise falls through as text, which is the correct failure for prose.
-Headings are underlined with a wave; so is `The description`.
-
-Paging lives in a **bar pinned to the bottom** (`← prev · n of N · next →`), so `next` is in the
-same place on every pull request. Under the description it would sit below the fold on a long
-body and halfway up the screen on a one-liner. Paging returns the reader to the top.
+Paging lives in a **bar pinned to the bottom** (`← prev · n of N · next →`).
+Previous/next replaces the current PR, resets the page, and keeps back pointing
+to the source. Paging remains available when a PR fails to load. Comment and
+review links select `talk`; file and check links select their corresponding tab.
 
 ### 12a. `cycle` — pin10's rows, for pull requests
 
@@ -333,6 +329,13 @@ row says which pull request it is and opens it** — the key used to be a second
 under the chart, matched to it by counting rows.
 
 ### 13. `pull` — a pull request, opened
+
+Every entry point uses `pullRoute` and this page's `usePullDetail` loader. The
+core PR, conversation, management details and file patches are separate reads.
+A failed supplemental read is shown in its section with GitHub's reason and a
+retry action; it never hides a readable description or becomes a false empty
+list. Management controls are hidden when their permissions were not loaded.
+A revoked token still fails the entire load. The cache version is `pull3`.
 
 Not a section: a full-screen page pushed **over** the sections and the bar, from `pulls`,
 `brief`, `cycle`, the inbox or a link, with its own back button and a `hardwareBackPress`
@@ -740,7 +743,7 @@ pushes the rest.
 - **Detail is a stack.** `pull`, `thread`, `repo`, `file`, `user`, `search`, `gists`,
   `gist`, the forms that make something (`new issue`, `new pull request`, `new
   release`, `new discussion`, `new file`, `new repository`, `new gist`), the folded
-  lists (`queue`, `assigned`, `brief`, `people`), `account`, `share` and `add account`
+  lists (`queue`, `assigned`, `people`), `account`, `share` and `add account`
   push over the sections and over each other, each with `←
   back` and the system back button wired to pop the top. A pushed page about one
   thing may have views of it (`Segments` on `pull`): it covers the bar, so that row
@@ -807,6 +810,8 @@ told no, this build cannot sign in by code. The token that comes back is stored 
 verified exactly as a pasted one is, and asks for the same scopes.
 
 The client id is `app.json` → `expo.extra.githubClientId` (`lib/oauthConfig.ts`).
+Official builds configure the `git-huh` OAuth app with Device Flow enabled and
+token expiration disabled, since the client does not handle refresh tokens yet.
 Empty, the page is the token form alone and says `paste a token`. The account page
 says how each account came in (`signed in with github`, `token`, `fine-grained
 token`, from the token's own prefix) and, for a signed-in one, links to GitHub's page

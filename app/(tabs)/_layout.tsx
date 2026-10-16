@@ -10,7 +10,6 @@ import { NavContext, type Route } from '../../src/lib/nav';
 import { tokenStore } from '../../src/lib/token';
 import { AccountScreen } from '../../src/screens/AccountScreen';
 import { AssignedPage } from '../../src/screens/AssignedScreen';
-import { BriefPage } from '../../src/screens/BriefScreen';
 import {
   NewDiscussionScreen,
   NewFileScreen,
@@ -44,7 +43,7 @@ import { colors, fonts, space, themed } from '../../src/theme';
 const RouteView = memo(function RouteView({ route }: { route: Route }) {
   switch (route.kind) {
     case 'pull':
-      return <PullScreen number={route.number} repo={route.repo} />;
+      return <PullScreen key={`${route.repo}#${route.number}`} initialTab={route.tab} number={route.number} repo={route.repo} sequence={route.sequence} />;
     case 'thread':
       return <ThreadScreen number={route.number} repo={route.repo} type={route.type} />;
     case 'repo':
@@ -81,8 +80,6 @@ const RouteView = memo(function RouteView({ route }: { route: Route }) {
       return <QueuePage />;
     case 'assigned':
       return <AssignedPage />;
-    case 'brief':
-      return <BriefPage />;
     case 'people':
       return <PeoplePage />;
     case 'inbox':
@@ -124,7 +121,6 @@ function routeKey(route: Route): string {
     case 'account':
     case 'queue':
     case 'assigned':
-    case 'brief':
     case 'people':
     case 'inbox':
       return route.kind;

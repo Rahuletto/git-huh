@@ -37,7 +37,7 @@ export function usePullDetail(
       return pull;
     },
     {
-      cacheKey: login && token !== DEMO_TOKEN ? `${login.toLowerCase()}-pull2-${repo}-${number}` : null,
+      cacheKey: login && token !== DEMO_TOKEN ? `${login.toLowerCase()}-pull3-${repo}-${number}` : null,
       demo,
     },
   );

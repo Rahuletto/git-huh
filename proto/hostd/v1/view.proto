@@ -1,0 +1,107 @@
+syntax = "proto3";
+
+package hostd.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// A View is what a generic client draws. It knows nothing about where the
+// data came from: a collector's output is shaped into one or more Views by
+// the server's config (or by the collector itself), and the client picks a
+// drawing from the `body` case.
+message View {
+  // Unique within the scope it is listed in ("host" or a service id).
+  string id = 1;
+  string title = 2;
+  // A unit printed after a number, e.g. "%" or "°c".
+  string unit = 3;
+  Display display = 4;
+  // For a number: the top of its scale, so it can be drawn as a meter.
+  optional double max = 5;
+  // How often the server reads it, in seconds.
+  int32 every_seconds = 6;
+  // When it was last read.
+  google.protobuf.Timestamp at = 7;
+  // Set when the last read failed; the client prints it in the View's place.
+  string error = 8;
+  // True until the first read has finished.
+  bool pending = 9;
+  // "scope/source/view": pass it to SourceService.ReadSource to read again.
+  string key = 10;
+
+  oneof body {
+    Stat stat = 20;
+    Series series = 21;
+    Status status = 22;
+    Lines list = 23;
+    Table table = 24;
+    Lines log = 25;
+    Bars bars = 26;
+  }
+}
+
+// How a number is shown.
+enum Display {
+  DISPLAY_UNSPECIFIED = 0;
+  DISPLAY_NUMBER = 1;
+  DISPLAY_PERCENT = 2;
+  DISPLAY_BYTES = 3;
+  // A unix time in seconds (or milliseconds), shown as "5m".
+  DISPLAY_AGO = 4;
+  // A number of seconds, shown as "3h".
+  DISPLAY_DURATION = 5;
+}
+
+// One number or one word.
+message Value {
+  oneof kind {
+    double number = 1;
+    string text = 2;
+  }
+}
+
+// A big figure.
+message Stat {
+  Value value = 1;
+  // Earlier readings, oldest first, when the View keeps history.
+  // NaN marks a reading that had no number.
+  repeated double history = 2;
+}
+
+// A number sampled over time: the latest reading and its history.
+message Series {
+  Value value = 1;
+  // Oldest first. NaN marks a reading that had no number.
+  repeated double points = 2;
+}
+
+// Ok or not, and a word.
+message Status {
+  bool ok = 1;
+  string text = 2;
+}
+
+// Lines of text: a list (top first) or a log (newest last).
+message Lines {
+  repeated string lines = 1;
+}
+
+message Table {
+  repeated string columns = 1;
+  repeated Row rows = 2;
+  // How many rows there were before the limit.
+  int32 total = 3;
+}
+
+message Row {
+  repeated string cells = 1;
+}
+
+// Label → number, biggest first.
+message Bars {
+  repeated Bar bars = 1;
+}
+
+message Bar {
+  string label = 1;
+  double value = 2;
+}

@@ -11,7 +11,7 @@ import { Body, Label, Micro } from '../components/Type';
 import { WaitDot } from '../components/WaitDot';
 import type { Remote } from '../hooks/useRemote';
 import type { QueuedPull, Queue, ReviewedPull } from '../lib/queue';
-import { useNav } from '../lib/nav';
+import { pullRoute, useNav } from '../lib/nav';
 import { savedAge } from '../lib/store';
 import { useSession } from '../shell/session';
 import { colors, fonts, themed } from '../theme';
@@ -65,7 +65,7 @@ export function QueuePage() {
   const nav = useNav();
   const { queue } = useSession();
   const open = useCallback(
-    (pr: { repo: string; number: number }) => nav.open({ kind: 'pull', repo: pr.repo, number: pr.number }),
+    (pr: { repo: string; number: number }) => nav.open(pullRoute(pr)),
     [nav],
   );
   return (

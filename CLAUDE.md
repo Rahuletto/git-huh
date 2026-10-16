@@ -32,9 +32,9 @@ needs the `notifications` scope).
 
 It also watches **a machine of yours**: the `host` section is a client of
 `hostd`, a companion server you run on your own computer and reach over your
-tailnet. It lives in its own repository (private, work in progress, being
-rebuilt on gRPC/protobuf; the client here will follow its API). It reports the machine's CPU, memory,
-heat and disks, the services its JSON config names (a systemd unit or a
+tailnet. It lives in its own repository (private, work in progress) and
+speaks gRPC/Connect with protobuf contracts. It reports the machine's CPU, memory,
+heat and disks, the services its config names (a systemd unit or a
 process), their health, CPU, memory and logs, the actions the config allows
 (restart, stop, your own commands), and any panels the config defines. The
 app draws the kinds it is given and knows nothing about any particular
@@ -157,7 +157,7 @@ compiled on a Mac.
   (`split`), `Orbit` (`languages`), `Archive` (`years`), `People`. A block
   renders a `Block` (its `ScreenHead` and cards), never a `Page` of its own.
   `Queue` and `Assigned` export a `Tile` for the inbox's page and a pushed page;
-  `Brief` a tile and the pushed reader; `People` the block and a pushed page of
+  `Brief` a tile opening the shared PR page with optional sequence paging; `People` the block and a pushed page of
   everyone. Plus `Loading` (the widget's card with a light sweeping its dots,
   shown while the first request is in flight), `Dots` (unlinked legacy view),
   and the other pushed pages: `Pull`, `Thread` (issue or discussion), `Repo`
@@ -216,8 +216,13 @@ compiled on a Mac.
 - **The host section** is a client of `hostd` (its own private repository;
   the server, its config and its API are documented there). In the app,
   `src/lib/host.ts` (types, formatting, `squeeze`, the demo host — pure and
-  tested), `src/lib/hostClient.ts` (the requests, and the address and token in
-  the keystore), `src/hooks/useHost.ts` (settings shared across pages; polling
+  tested), `src/lib/hostClient.ts` (the generated Connect client over
+  `fetch`, binary protobuf, bearer token; the address and token in the
+  keystore), `src/lib/hostProto.ts` (proto messages → the types the screens
+  draw, pure and tested), `proto/` (hostd's `.proto` files, copied from its
+  repository; when they change, copy them again and run `npm run gen:host`,
+  which writes `src/gen/` with `buf` and `protoc-gen-es`; `src/gen` is
+  committed and not linted), `src/hooks/useHost.ts` (settings shared across pages; polling
   every `every` seconds only while on screen) and `src/components/HostPanel.tsx`
   (one panel per kind, `Series`, `Meter`, `LogLines`). Release builds allow
   plain `http` only to `*.ts.net` (`android/app/src/release/res/xml/network_security_config.xml`);
@@ -315,7 +320,9 @@ compiled on a Mac.
   `expo.extra.githubClientId` (`src/lib/oauthConfig.ts`); **empty means no
   OAuth app is behind this build** and the sign-in page is the token form
   alone. To turn it on: register an OAuth app on GitHub, tick *Enable Device
-  Flow*, paste its client id there, rebuild. A signed-in token is a `gho_`
+  Flow*, disable *Expire user access tokens* (refresh tokens are not supported),
+  paste its client id there, rebuild. Official builds use the `git-huh` OAuth
+  app owned by `jaikhuranna`, with its public client id committed. A signed-in token is a `gho_`
   token stored exactly like a pasted one; `tokenKind` reads how an account
   came in from the prefix, so nothing extra is stored. Disconnecting cannot
   revoke an OAuth grant (that needs the secret), so the account page links to
@@ -328,9 +335,22 @@ compiled on a Mac.
   gated on the `inbox` and `year` sections.
 - `src/hooks/useTokenScopes.ts` — reads `x-oauth-scopes` off a REST call and
   drives the "no repo scope" strip in `src/shell/SectionScreen.tsx`. See the trap below.
-- `src/lib/pullDetail.ts` — one pull request in full: GraphQL for the object,
-  its comments and its review threads, REST for the file patches (GraphQL's
-  `files` connection carries no patch text), plus the unified-diff parser.
+- **One PR detail path.** Every list, comment, notification and link uses
+  `pullRoute` → `PullScreen` → `usePullDetail` (`pull3` cache) → `fetchPullDetail`.
+  Brief's `read all` supplies a sequence of identities to that same screen;
+  `PullPager` replaces the current PR so back returns to the source. Never add
+  a second description reader. Comment/review links select `talk`.
+- `src/lib/pullRequest.ts` owns `PullRef`, `PullSummary`, the shared GraphQL
+  fields/schema and mapper. Activity extends the summary as `PullActivity`;
+  it is a sample for charts and previews, not a detail response. `PullHeader`
+  renders both the preview and detail header.
+- `src/lib/pullDetail.ts` requires only the core PR. Conversation, management
+  details and REST patches are separate supplemental reads through
+  `optionalRead`. Failures are serializable `unavailable` entries shown by
+  `ReadNotice`, with a reason and retry; never silently draw an empty section
+  or invent permissions. Expired tokens and aborts still fail the entire load.
+  `rest.explain` preserves GitHub's denial reason instead of assuming missing
+  scopes. Every schema change requires a cache key bump.
 - `src/lib/` — GitHub GraphQL and REST (`github.ts`, `rest.ts`: every
   failure is a `GitHubError` with a `kind`, never a raw fetch or Zod error),
   the `GitHubModel` view model, seeded demo data. The pure modules have unit

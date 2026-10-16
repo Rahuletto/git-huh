@@ -127,6 +127,7 @@ export function IconPill({
   on = false,
   hint,
   dim = false,
+  disabled = false,
   style,
   children,
 }: {
@@ -137,6 +138,7 @@ export function IconPill({
   hint?: string;
   /** A quieter pill, for the second thing in a row. */
   dim?: boolean;
+  disabled?: boolean;
   style?: StyleProp<ViewStyle>;
   children?: ReactNode;
 }) {
@@ -145,10 +147,11 @@ export function IconPill({
     <Pressable
       accessibilityHint={hint}
       accessibilityRole="button"
-      accessibilityState={{ selected: on }}
+      accessibilityState={{ selected: on, disabled }}
+      disabled={disabled}
       hitSlop={6}
       onPress={onPress}
-      style={[styles.pill, on && styles.on, style]}
+      style={[styles.pill, on && styles.on, disabled && { opacity: 0.3 }, style]}
     >
       {icon ? <Icon color={ink} name={icon} size={14} /> : null}
       <Label numberOfLines={1} style={{ color: ink }}>

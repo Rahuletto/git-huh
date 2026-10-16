@@ -21,7 +21,7 @@ import {
 } from '../lib/checks';
 import { listBranches, listPulls, type PullRow } from '../lib/explore';
 import { GitHubError } from '../lib/github';
-import { useNav } from '../lib/nav';
+import { pullRoute, useNav } from '../lib/nav';
 import type { RepoInfo } from '../lib/repo';
 import { createBranch, deleteBranch } from '../lib/writes';
 import { colors, radii, themed } from '../theme';
@@ -94,7 +94,7 @@ export function Pulls({ repo, info }: { repo: string; info: RepoInfo | null }) {
           <Pressable
             accessibilityRole="button"
             key={pull.number}
-            onPress={() => nav.open({ kind: 'pull', repo, number: pull.number })}
+            onPress={() => nav.open(pullRoute({ repo, number: pull.number }))}
             style={styles.row}
           >
             <View style={styles.rowTop}>

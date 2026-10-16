@@ -1,0 +1,8 @@
+# The host section's client, generated from hostd's protos (copied here from
+# the hostd repository; copy them again when they change, then
+# `npm run gen:host`).
+version: v2
+plugins:
+  - local: ../node_modules/.bin/protoc-gen-es
+    out: ../src/gen
+    opt: target=ts

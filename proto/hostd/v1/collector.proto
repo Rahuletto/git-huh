@@ -1,0 +1,68 @@
+syntax = "proto3";
+
+package hostd.v1;
+
+import "google/protobuf/any.proto";
+import "google/protobuf/struct.proto";
+import "hostd/v1/view.proto";
+
+// CollectorService is what an external collector implements: a program in
+// any language that the server launches (or reaches at an address) and asks
+// for data. It is how a new kind of data is added without touching the
+// server.
+//
+// The server calls it with the Connect protocol, which over HTTP/1.1 with
+// JSON is a plain POST: `POST /hostd.v1.CollectorService/Collect` with a JSON
+// body, answered with JSON. A collector therefore needs no gRPC library; the
+// Python example in collectors/ uses only the standard library. A launched
+// collector is given a unix socket path in HOSTD_SOCKET to listen on.
+service CollectorService {
+  // Who it is and what it offers. Called once when the server starts it.
+  rpc Describe(DescribeRequest) returns (DescribeResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // One reading, for one source's parameters.
+  rpc Collect(CollectRequest) returns (CollectResponse);
+  // Performs one of the actions it described.
+  rpc Act(ActRequest) returns (ActResponse);
+}
+
+message DescribeRequest {}
+
+message CollectorAction {
+  string id = 1;
+  string label = 2;
+  bool confirm = 3;
+}
+
+message DescribeResponse {
+  string id = 1;
+  string about = 2;
+  repeated string payload_types = 3;
+  repeated CollectorAction actions = 4;
+}
+
+message CollectRequest {
+  // The source's `params` from the server's config.
+  google.protobuf.Struct params = 1;
+}
+
+message CollectResponse {
+  // Plain JSON values. The config's shaping rules turn this into Views.
+  google.protobuf.Value data = 1;
+  // Optional: a typed message, for collectors that have one. Its type must
+  // be compiled into the server to cross the JSON protocol, so external
+  // collectors usually leave it out and send `data`.
+  google.protobuf.Any payload = 2;
+  // Optional: Views the collector draws itself, shown after the config's.
+  repeated View views = 3;
+}
+
+message ActRequest {
+  string action_id = 1;
+  google.protobuf.Struct params = 2;
+}
+
+message ActResponse {
+  string detail = 1;
+}

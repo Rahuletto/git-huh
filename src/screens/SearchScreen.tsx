@@ -6,7 +6,7 @@ import { Body, Data, Label, Micro } from '../components/Type';
 import { useRemote } from '../hooks/useRemote';
 import { searchGitHub, type SearchHit, type SearchKind } from '../lib/explore';
 import { GitHubError } from '../lib/github';
-import { useNav } from '../lib/nav';
+import { pullRoute, useNav } from '../lib/nav';
 import { colors, space, themed } from '../theme';
 import { SearchField } from './RepoScreen';
 import { Chips, fmt } from './shared';
@@ -138,7 +138,7 @@ function Hit({ hit }: { hit: SearchHit }) {
           onPress={() =>
             nav.open(
               hit.kind === 'pull'
-                ? { kind: 'pull', repo: hit.repo, number: hit.number }
+                ? pullRoute(hit)
                 : { kind: 'thread', repo: hit.repo, number: hit.number, type: 'issue' },
             )
           }

@@ -1,0 +1,184 @@
+syntax = "proto3";
+
+package hostd.v1;
+
+import "google/protobuf/timestamp.proto";
+import "hostd/v1/view.proto";
+
+// HostService is the machine and the services watched on it: what a phone
+// shows on its host page. Every call except Health needs the token.
+service HostService {
+  // Unauthenticated: is the server up, and what is it called.
+  rpc Health(HealthRequest) returns (HealthResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // The machine, every service in brief, and the machine's own Views.
+  rpc GetOverview(GetOverviewRequest) returns (GetOverviewResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // One service in full: its graphs, actions and Views.
+  rpc GetService(GetServiceRequest) returns (GetServiceResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // The last lines of a service's log.
+  rpc GetLogs(GetLogsRequest) returns (GetLogsResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // The last lines of a service's log, then each new line as it is written.
+  rpc StreamLogs(StreamLogsRequest) returns (stream StreamLogsResponse);
+  // Runs one of the actions the server's config allows for a service.
+  // The client names the action; it never sends a command.
+  rpc RunAction(RunActionRequest) returns (RunActionResponse);
+}
+
+message HealthRequest {}
+
+message HealthResponse {
+  bool ok = 1;
+  string name = 2;
+  string version = 3;
+}
+
+message GetOverviewRequest {
+  // How many history points to return per graph (default 120).
+  int32 points = 1;
+}
+
+message GetOverviewResponse {
+  string name = 1;
+  // Seconds between samples of the machine and the services.
+  int32 every_seconds = 2;
+  Machine machine = 3;
+  MachineHistory history = 4;
+  // In brief: no Views, and history only for cpu and up.
+  repeated Service services = 5;
+  // The machine's own Views.
+  repeated View views = 6;
+  // Set when the config on disk failed to load; the last good one is running.
+  string config_error = 7;
+}
+
+message Machine {
+  google.protobuf.Timestamp at = 1;
+  double cpu_percent = 2;
+  int32 cores = 3;
+  Memory memory = 4;
+  // 1, 5 and 15 minutes.
+  repeated double load = 5;
+  double uptime_seconds = 6;
+  optional double temperature = 7;
+  repeated Disk disks = 8;
+}
+
+message Memory {
+  int64 total_bytes = 1;
+  int64 used_bytes = 2;
+  double percent = 3;
+  int64 swap_used_bytes = 4;
+}
+
+message Disk {
+  string path = 1;
+  int64 total_bytes = 2;
+  int64 used_bytes = 3;
+  double percent = 4;
+}
+
+// Oldest first; NaN where there was no reading.
+message MachineHistory {
+  repeated double cpu = 1;
+  repeated double memory = 2;
+  repeated double temperature = 3;
+}
+
+message Service {
+  string id = 1;
+  string name = 2;
+  string about = 3;
+  // A page to open for it, if any.
+  string url = 4;
+  // How it is found: "systemd" or "process".
+  string via = 5;
+  // The unit name, or the process match.
+  string unit = 6;
+
+  // systemd's ActiveState ("active", "inactive", "failed", ...) or, for a
+  // process, "active" or "inactive". "unknown" until it has been sampled.
+  string state = 10;
+  string sub = 11;
+  string description = 12;
+  int32 pid = 13;
+  repeated int32 pids = 14;
+  google.protobuf.Timestamp since = 15;
+  optional int32 restarts = 16;
+  optional int64 memory_bytes = 17;
+  optional double cpu_percent = 18;
+  string result = 19;
+  HealthCheck health = 20;
+
+  bool has_logs = 30;
+  repeated Action actions = 31;
+  ServiceHistory history = 32;
+  repeated View views = 33;
+}
+
+message HealthCheck {
+  bool ok = 1;
+  string detail = 2;
+  int32 millis = 3;
+  google.protobuf.Timestamp at = 4;
+}
+
+// Oldest first; NaN where it was not running.
+message ServiceHistory {
+  repeated double cpu = 1;
+  repeated double memory = 2;
+  // 1 when it was running and healthy, else 0.
+  repeated double up = 3;
+}
+
+message Action {
+  string id = 1;
+  string label = 2;
+  // Ask before running it.
+  bool confirm = 3;
+}
+
+message GetServiceRequest {
+  string id = 1;
+  int32 points = 2;
+}
+
+message GetServiceResponse {
+  Service service = 1;
+  int32 every_seconds = 2;
+}
+
+message GetLogsRequest {
+  string service_id = 1;
+  // Default 200, at most 2000.
+  int32 lines = 2;
+}
+
+message GetLogsResponse {
+  repeated string lines = 1;
+  google.protobuf.Timestamp at = 2;
+}
+
+message StreamLogsRequest {
+  string service_id = 1;
+  int32 lines = 2;
+}
+
+message StreamLogsResponse {
+  repeated string lines = 1;
+}
+
+message RunActionRequest {
+  string service_id = 1;
+  string action_id = 2;
+}
+
+message RunActionResponse {
+  string detail = 1;
+}

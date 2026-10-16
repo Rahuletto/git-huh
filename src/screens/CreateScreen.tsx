@@ -11,7 +11,7 @@ import { listBranches, listCategories } from '../lib/explore';
 import { GitHubError } from '../lib/github';
 import { update } from '../lib/ideas';
 import { ideasStore } from '../lib/ideasStorage';
-import { useNav } from '../lib/nav';
+import { pullRoute, useNav } from '../lib/nav';
 import { fetchRepoInfo, listReleases } from '../lib/repo';
 import {
   createDiscussion,
@@ -177,7 +177,7 @@ export function NewPullScreen({ repo, head: startHead }: { repo: string; head?: 
             base: into,
             draft,
           });
-          nav.replace({ kind: 'pull', repo, number });
+          nav.replace(pullRoute({ repo, number }));
           return `opened #${number}`;
         }}
       />

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { routeForUrl } from './nav';
+import { pullRoute, routeForUrl } from './nav';
 
 test('a repository link opens the repository', () => {
   assert.deepEqual(routeForUrl('https://github.com/expo/expo'), { kind: 'repo', repo: 'expo/expo' });
@@ -16,6 +16,7 @@ test('pull requests, issues and discussions open their own pages', () => {
     kind: 'pull',
     repo: 'a/b',
     number: 12,
+    tab: 'talk',
   });
   assert.deepEqual(routeForUrl('https://github.com/a/b/issues/7?q=1'), {
     kind: 'thread',
@@ -89,5 +90,27 @@ test('a compare link opens a new pull request from its head', () => {
     kind: 'new-pull',
     repo: 'a/b',
     head: 'fix',
+  });
+});
+
+
+test('brief paging and direct entry use the same PR route with only identity stored', () => {
+  const pr = { repo: 'a/b', number: 7, body: 'stale preview', canUpdate: true };
+  const next = { repo: 'c/d', number: 8 };
+  assert.deepEqual(pullRoute(pr), routeForUrl('https://github.com/a/b/pull/7'));
+  assert.deepEqual(pullRoute(pr, [pr, next]), {
+    kind: 'pull', repo: 'a/b', number: 7,
+    sequence: [{ repo: 'a/b', number: 7 }, next],
+  });
+});
+
+test('comment links select talk and file links select files on the same PR page', () => {
+  for (const hash of ['issuecomment-123', 'discussion_r456', 'pullrequestreview-789']) {
+    assert.deepEqual(routeForUrl(`https://github.com/a/b/pull/7#${hash}`), {
+      ...pullRoute({ repo: 'a/b', number: 7 }), tab: 'talk',
+    });
+  }
+  assert.deepEqual(routeForUrl('https://github.com/a/b/pull/7/files'), {
+    ...pullRoute({ repo: 'a/b', number: 7 }), tab: 'diff',
   });
 });

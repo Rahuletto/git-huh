@@ -17,17 +17,19 @@ import { Composer } from '../components/Composer';
 import { Details } from '../components/Details';
 import { IconPill } from '../components/Icon';
 import { Diff } from '../components/Diff';
-import { DiffDots } from '../components/DiffDots';
 import { Markdown } from '../components/Markdown';
 import { MergeBox } from '../components/MergeBox';
 import { SavedNote } from '../components/Overlay';
+import { PullHeader } from '../components/PullHeader';
+import { PullPager } from '../components/PullPager';
+import { ReadNotice } from '../components/ReadNotice';
 import { Reactions } from '../components/Reactions';
 import { Segments } from '../components/Segments';
 import { Squiggle } from '../components/Squiggle';
-import { StateChip } from '../components/StateChip';
-import { Body, Data, Heading, Label, Micro } from '../components/Type';
+import { Body, Data, Label, Micro } from '../components/Type';
 import { usePullDetail } from '../hooks/usePullDetail';
-import { useNav } from '../lib/nav';
+import { useNav, type PullTab } from '../lib/nav';
+import type { PullRef } from '../lib/pullRequest';
 import { parsePatch, type PullComment, type PullDetailFull } from '../lib/pullDetail';
 import { explain } from '../lib/rest';
 import {
@@ -39,11 +41,9 @@ import {
   submitReview,
 } from '../lib/writes';
 import { colors, fonts, radii, space, themed } from '../theme';
-import { ago, fmt } from './shared';
+import { ago } from './shared';
 
-type Tab = 'brief' | 'talk' | 'diff' | 'checks';
-
-const TABS: readonly (readonly [Tab, string])[] = [
+const TABS: readonly (readonly [PullTab, string])[] = [
   ['brief', 'the brief'],
   ['talk', 'talk'],
   ['diff', 'files'],
@@ -64,12 +64,12 @@ const TABS: readonly (readonly [Tab, string])[] = [
  * those things; the wave is what marks the part of a pull request that is
  * two people arguing rather than a statistic.
  */
-export function PullScreen({ repo, number }: { repo: string; number: number }) {
+export function PullScreen({ repo, number, initialTab = 'brief', sequence }: PullRef & { initialTab?: PullTab; sequence?: readonly PullRef[] }) {
   const nav = useNav();
   const onClose = nav.close;
   const { width } = useWindowDimensions();
   const state = usePullDetail(nav.token, nav.login, repo, number);
-  const [tab, setTab] = useState<Tab>('brief');
+  const [tab, setTab] = useState<PullTab>(initialTab);
   const [find, setFind] = useState('');
   const body = width - space.gutter * 2;
 
@@ -118,6 +118,7 @@ export function PullScreen({ repo, number }: { repo: string; number: number }) {
       {state.status === 'error' && (
         <View style={styles.errorStack}>
           <Body style={styles.error}>{explain(state.error, 'opening this pull request')}</Body>
+          <IconPill icon="refresh" label="try again" onPress={state.reload} />
           <IconPill
             icon="external"
             label="open it on github"
@@ -130,13 +131,13 @@ export function PullScreen({ repo, number }: { repo: string; number: number }) {
 
       {pull && (
         <>
-          <Header pull={pull} />
+          <View style={styles.header}><PullHeader author={pull.author} pull={pull} /></View>
 
           <Segments
             current={TABS.findIndex(([value]) => value === tab)}
             items={TABS.map(([value, label]) =>
               value === 'talk'
-                ? `${label} ${pull.comments.length}`
+                ? pull.unavailable.conversation ? `${label} · unavailable` : `${label} ${pull.comments.length}`
                 : value === 'diff'
                   ? `${label} ${pull.changedFiles}`
                   : label,
@@ -155,7 +156,9 @@ export function PullScreen({ repo, number }: { repo: string; number: number }) {
                 <View style={styles.bodyReactions}>
                   <Reactions onChanged={state.reload} reactions={pull.reactions} subjectId={pull.id} />
                 </View>
-                <Details
+                {pull.unavailable.details ? (
+                  <ReadNotice failure={pull.unavailable.details} subject="pull request details and merge controls" onRetry={state.reload} />
+                ) : <Details
                   assignees={pull.assignees}
                   body={pull.body}
                   canUpdate={pull.canUpdate}
@@ -169,13 +172,17 @@ export function PullScreen({ repo, number }: { repo: string; number: number }) {
                   repo={repo}
                   reviewers={pull.reviewers}
                   title={pull.title}
-                />
+                />}
               </>
             )}
             {tab === 'talk' && (
               <>
-                <Conversation onChanged={state.reload} pull={pull} width={body} />
-                <MergeBox onChanged={state.reload} pull={pull} />
+                {pull.unavailable.conversation ? (
+                  <ReadNotice failure={pull.unavailable.conversation} subject="the conversation" onRetry={state.reload} />
+                ) : <Conversation onChanged={state.reload} pull={pull} width={body} />}
+                {pull.unavailable.details ? (
+                  <ReadNotice failure={pull.unavailable.details} subject="merge controls" onRetry={state.reload} />
+                ) : <MergeBox onChanged={state.reload} pull={pull} />}
                 <Composer
                   actions={[
                     { key: 'comment', label: 'comment', primary: true, icon: 'send' as const },
@@ -207,8 +214,9 @@ export function PullScreen({ repo, number }: { repo: string; number: number }) {
                 />
               </>
             )}
-            {tab === 'diff' && (
-              <>
+            {tab === 'diff' && (pull.unavailable.files ? (
+              <ReadNotice failure={pull.unavailable.files} subject="the files" onRetry={state.reload} />
+            ) : <>
                 <TextInput
                   autoCapitalize="none"
                   autoCorrect={false}
@@ -262,53 +270,9 @@ export function PullScreen({ repo, number }: { repo: string; number: number }) {
           </View>
         </>
       )}
+      {sequence && <PullPager pull={{ repo, number }} sequence={sequence} />}
     </SafeAreaView>
   );
-}
-
-function AuthorLink({ login, style }: { login: string; style: object }) {
-  const nav = useNav();
-  return (
-    <Pressable accessibilityRole="link" hitSlop={6} onPress={() => nav.open({ kind: 'user', login })}>
-      <Data style={style}>~{login}</Data>
-    </Pressable>
-  );
-}
-
-/** The cover of the pull request, on the widget's card. */
-function Header({ pull }: { pull: PullDetailFull }) {
-  return (
-    <View style={styles.header}>
-      <PullState pull={pull} />
-      <Heading style={styles.title}>{pull.title}</Heading>
-
-      <View style={styles.diff}>
-        <DiffDots additions={pull.additions} deletions={pull.deletions} />
-      </View>
-
-      <View style={styles.statRow}>
-        <Data style={styles.stat}>{fmt(pull.changedFiles)} files</Data>
-        <Data style={styles.stat}>{fmt(pull.commits)} commits</Data>
-        <AuthorLink login={pull.author} style={styles.stat} />
-        <Data style={styles.stat}>{ago(pull.createdAt)}</Data>
-      </View>
-    </View>
-  );
-}
-
-function PullState({ pull }: { pull: PullDetailFull }) {
-  const [text, tone] = pull.isDraft
-    ? ['draft', colors.ink40]
-    : pull.state === 'MERGED'
-      ? ['merged', colors.ink]
-      : pull.state === 'CLOSED'
-        ? ['closed', colors.no]
-        : pull.reviewDecision === 'APPROVED'
-          ? ['approved', colors.yes]
-          : pull.reviewDecision === 'CHANGES_REQUESTED'
-            ? ['changes', colors.no]
-            : ['open', colors.ink];
-  return <StateChip text={text} tone={tone} />;
 }
 
 function Conversation({
@@ -561,30 +525,9 @@ const styles = themed(() =>
       paddingVertical: 7,
     },
     header: {
-      backgroundColor: colors.card,
-      borderRadius: radii.card,
-      gap: 10,
       marginBottom: 12,
       marginHorizontal: space.gutter,
       marginTop: 10,
-      padding: space.card,
-    },
-    diff: {
-      marginTop: 4,
-    },
-    title: {
-      fontSize: 16,
-      lineHeight: 23,
-    },
-    statRow: {
-      alignItems: 'center',
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: 12,
-    },
-    stat: {
-      color: colors.ink40,
-      fontSize: 11,
     },
     page: {
       paddingBottom: 26,
@@ -686,6 +629,7 @@ const styles = themed(() =>
       textAlign: 'center',
     },
     errorStack: {
+      flex: 1,
       alignItems: 'center',
       gap: 14,
       marginTop: 30,

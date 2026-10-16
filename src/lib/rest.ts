@@ -115,7 +115,7 @@ export function explain(error: unknown, doing = 'that'): string {
       case 'invalid-token':
         return 'github rejected this token · sign in again';
       case 'forbidden':
-        return `this token is not allowed to do ${doing} here · it needs more scope`;
+        return `github did not allow ${doing} · ${error.message.replace(/\.$/, '')}`;
       case 'missing':
         return 'github could not find it · or this token cannot see it';
       case 'api':

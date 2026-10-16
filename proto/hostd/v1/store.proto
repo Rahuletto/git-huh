@@ -1,0 +1,97 @@
+syntax = "proto3";
+
+package hostd.v1;
+
+import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
+
+// StoreService keeps documents for apps that use the server as their
+// backend, e.g. notes written on a phone. Documents live in namespaces;
+// each namespace has its own revision counter, bumped by every write, so a
+// client syncs by asking for everything since the last revision it saw.
+service StoreService {
+  // Creates or replaces a document.
+  rpc Put(PutRequest) returns (PutResponse);
+  rpc Get(GetRequest) returns (GetResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // Leaves a tombstone, so clients that sync see the delete.
+  rpc Delete(DeleteRequest) returns (DeleteResponse);
+  // Documents changed after `since_revision` (all of them from 0).
+  rpc List(ListRequest) returns (ListResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // Every change after `since_revision`, then each new one as it happens.
+  rpc Watch(WatchRequest) returns (stream WatchResponse);
+}
+
+message Document {
+  string namespace = 1;
+  string id = 2;
+  // The namespace's revision when this version was written.
+  int64 revision = 3;
+  google.protobuf.Timestamp created_at = 4;
+  google.protobuf.Timestamp updated_at = 5;
+  // A tombstone: the document was deleted at `revision`.
+  bool deleted = 6;
+  google.protobuf.Struct body = 7;
+}
+
+message PutRequest {
+  string namespace = 1;
+  // Empty: the server makes one.
+  string id = 2;
+  google.protobuf.Struct body = 3;
+  // Optimistic concurrency. Unset: write regardless. 0: only if it does not
+  // exist (or was deleted). n: only if its current revision is n.
+  optional int64 expected_revision = 4;
+}
+
+message PutResponse {
+  Document document = 1;
+}
+
+message GetRequest {
+  string namespace = 1;
+  string id = 2;
+}
+
+message GetResponse {
+  Document document = 1;
+}
+
+message DeleteRequest {
+  string namespace = 1;
+  string id = 2;
+  optional int64 expected_revision = 3;
+}
+
+message DeleteResponse {
+  Document document = 1;
+}
+
+message ListRequest {
+  string namespace = 1;
+  int64 since_revision = 2;
+  // Tombstones are left out unless asked for (a sync wants them).
+  bool include_deleted = 3;
+  // Default 500, at most 5000. Ordered by revision.
+  int32 limit = 4;
+}
+
+message ListResponse {
+  repeated Document documents = 1;
+  // The namespace's current revision: pass it as since_revision next time.
+  int64 revision = 2;
+  // More changes than `limit`; ask again from the last document's revision.
+  bool more = 3;
+}
+
+message WatchRequest {
+  string namespace = 1;
+  int64 since_revision = 2;
+}
+
+message WatchResponse {
+  Document document = 1;
+}
