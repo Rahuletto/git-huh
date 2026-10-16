@@ -61,7 +61,7 @@ export function useRemote<T>(
   } = {},
 ): Remote<T> & { reload: () => void } {
   const [nonce, setNonce] = useState(0);
-  const [cached, setCached] = useState<Round<T> | null>(null);
+  const [cached, setCached] = useState<Omit<Round<T>, 'nonce'> | null>(null);
   const [fresh, setFresh] = useState<Round<T> | null>(null);
   const [failed, setFailed] = useState<Failure | null>(null);
 
@@ -77,14 +77,20 @@ export function useRemote<T>(
   useEffect(() => {
     if (skip || key == null) return;
     let cancelled = false;
-    const controller = new AbortController();
-
+    // Reuse the in-memory answer on refresh; disk is only for a new data source.
     if (cacheKey) {
       readSaved<T>(cacheKey).then((saved) => {
         if (cancelled || !saved) return;
-        setCached({ key, nonce, value: saved.value, at: saved.at });
+        setCached({ key, value: saved.value, at: saved.at });
       });
     }
+    return () => { cancelled = true; };
+  }, [cacheKey, key, skip]);
+
+  useEffect(() => {
+    if (skip || key == null) return;
+    let cancelled = false;
+    const controller = new AbortController();
 
     loader
       .current(controller.signal)
@@ -127,7 +133,7 @@ function derive<T>({
   key: string | null;
   nonce: number;
   demo: T | undefined;
-  cached: Round<T> | null;
+  cached: Omit<Round<T>, 'nonce'> | null;
   fresh: Round<T> | null;
   failed: Failure | null;
   reload: () => void;

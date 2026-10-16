@@ -26,12 +26,12 @@ const DEMO_AT = 1_760_000_000;
  * it (only what the host's config allows), the panels its config defines,
  * and the end of its log.
  */
-export function ServiceScreen({ id, name }: { id: string; name: string }) {
+export function ServiceScreen({ id, name, active }: { id: string; name: string; active: boolean }) {
   const nav = useNav();
   const { settings } = useHostSettings();
   const { width } = useWindowDimensions();
   const cardWidth = width - space.gutter * 2;
-  const state = useService(settings, id, true);
+  const state = useService(settings, id, active);
   const service = state.status === 'ready' ? state.data : null;
 
   return (

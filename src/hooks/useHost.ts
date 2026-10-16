@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { AppState } from 'react-native';
 
 import { demoOverview, demoServiceDetail, type HostSettings, type Overview, type ServiceDetail } from '../lib/host';
 import { fetchOverview, fetchService, hostStore } from '../lib/hostClient';
 import { useNav } from '../lib/nav';
+import { pollWhileForeground } from '../lib/polling';
 import { useRemote } from './useRemote';
 
 /** The demo's host: drawn from `demoOverview`, never asked over the network. */
@@ -50,8 +52,13 @@ export function useHostSettings() {
 export function usePoll(reload: () => void, seconds: number, active: boolean) {
   useEffect(() => {
     if (!active) return;
-    const timer = setInterval(reload, Math.max(5, seconds) * 1000);
-    return () => clearInterval(timer);
+    return pollWhileForeground(reload, seconds, {
+      currentState: AppState.currentState,
+      subscribe: (listener) => {
+        const subscription = AppState.addEventListener('change', listener);
+        return () => subscription.remove();
+      },
+    });
   }, [active, reload, seconds]);
 }
 
@@ -62,7 +69,9 @@ export function useOverview(settings: HostSettings | null | undefined, active: b
     (signal) => fetchOverview(settings as HostSettings, signal),
     { cacheKey: settings && !demo ? 'host-overview' : null, demo },
   );
-  usePoll(state.reload, state.status === 'ready' ? state.data.every : 10, active && !demo);
+  usePoll(state.reload, state.status === 'ready' ? state.data.every : 10, active && !!settings && !demo &&
+    state.status !== 'loading' && state.status !== 'idle' &&
+    !(state.status === 'ready' && state.refreshing));
   return state;
 }
 
@@ -73,6 +82,8 @@ export function useService(settings: HostSettings | null | undefined, id: string
     (signal) => fetchService(settings as HostSettings, id, signal),
     { cacheKey: settings && !demo ? `host-service-${id}` : null, demo },
   );
-  usePoll(state.reload, state.status === 'ready' ? state.data.every : 10, active && !demo);
+  usePoll(state.reload, state.status === 'ready' ? state.data.every : 10, active && !!settings && !demo &&
+    state.status !== 'loading' && state.status !== 'idle' &&
+    !(state.status === 'ready' && state.refreshing));
   return state;
 }

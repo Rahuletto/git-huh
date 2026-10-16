@@ -40,7 +40,7 @@ import { colors, fonts, space, themed } from '../../src/theme';
  * One thing pushed over the sections. Memoised: a page lower in the stack
  * should not redraw because another was pushed on top of it.
  */
-const RouteView = memo(function RouteView({ route }: { route: Route }) {
+const RouteView = memo(function RouteView({ route, active }: { route: Route; active: boolean }) {
   switch (route.kind) {
     case 'pull':
       return <PullScreen key={`${route.repo}#${route.number}`} initialTab={route.tab} number={route.number} repo={route.repo} sequence={route.sequence} />;
@@ -85,7 +85,7 @@ const RouteView = memo(function RouteView({ route }: { route: Route }) {
     case 'inbox':
       return <InboxPage />;
     case 'service':
-      return <ServiceScreen id={route.id} name={route.name} />;
+      return <ServiceScreen id={route.id} name={route.name} active={active} />;
     case 'add-account':
       return null;
   }
@@ -264,7 +264,7 @@ export default function TabsLayout() {
               }}
             />
           ) : (
-            <RouteView route={route} />
+            <RouteView route={route} active={index === stack.length - 1} />
           )}
         </View>
       ))}

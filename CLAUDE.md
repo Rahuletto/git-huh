@@ -179,7 +179,8 @@ compiled on a Mac.
   answer (`src/lib/store.ts`, JSON files in the documents directory — *not*
   SecureStore, which caps at ~2 KB) is drawn first, the fresh one replaces
   it, and offline the saved one stays with its age. New data sources should
-  use it rather than a hand-rolled hook. Cache keys start with the lowercase
+  use it rather than a hand-rolled hook. Disk is read once per data source;
+  refreshes reuse the in-memory answer while fetching its replacement. Cache keys start with the lowercase
   login and a dash, so `accountStore.remove` can clear an account's answers.
 - **Every GitHub write** is in `src/lib/writes.ts` (comments, reviews, line
   comments, reactions, edits and deletes, issues, labels, assignees,
@@ -223,7 +224,8 @@ compiled on a Mac.
   repository; when they change, copy them again and run `npm run gen:host`,
   which writes `src/gen/` with `buf` and `protoc-gen-es`; `src/gen` is
   committed and not linted), `src/hooks/useHost.ts` (settings shared across pages; polling
-  every `every` seconds only while on screen) and `src/components/HostPanel.tsx`
+  every `every` seconds only while on screen and the app is in the foreground;
+  pauses during in-flight requests, refreshes on foreground return) and `src/components/HostPanel.tsx`
   (one panel per kind, `Series`, `Meter`, `LogLines`). Release builds allow
   plain `http` only to `*.ts.net` (`android/app/src/release/res/xml/network_security_config.xml`);
   an IP address will not connect, a MagicDNS name will. `HostParts.tsx` holds
