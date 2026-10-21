@@ -8,6 +8,7 @@ import { SourceService } from '../gen/hostd/v1/source_pb';
 import { GitHubError } from './github';
 import { HostError, type HostSettings, type Overview, type Panel, type ServiceDetail } from './host';
 import { toOverview, toPanel, toServiceDetail } from './hostProto';
+import { hostProbeFetch } from './hostProbeFetch';
 
 /**
  * Talking to `hostd`: where it is and its token (in the keystore, beside the
@@ -45,41 +46,48 @@ export const hostStore = {
 };
 
 const POINTS = 120;
-const TIMEOUT = 10_000;
+// A public Funnel address can take several seconds to open a cold connection.
+const TIMEOUT = 20_000;
 
-function clients(settings: HostSettings) {
+function clients(settings: HostSettings, connectionProbe = false) {
   const bearer: Interceptor = (next) => (request) => {
     if (settings.token) request.header.set('Authorization', `Bearer ${settings.token}`);
     return next(request);
   };
   const transport = createConnectTransport({
     baseUrl: settings.url,
-    useBinaryFormat: true,
+    useBinaryFormat: !connectionProbe,
+    fetch: connectionProbe && Platform.OS !== 'web' ? hostProbeFetch : undefined,
     interceptors: [bearer],
   });
   return { host: createClient(HostService, transport), sources: createClient(SourceService, transport) };
 }
 
 /** One call, with the app's errors: the host's own words, or "could not reach". */
-async function call<T>(settings: HostSettings, signal: AbortSignal | undefined, run: (c: ReturnType<typeof clients>) => Promise<T>): Promise<T> {
+async function call<T>(settings: HostSettings, signal: AbortSignal | undefined, run: (c: ReturnType<typeof clients>) => Promise<T>, connectionProbe = false): Promise<T> {
   try {
-    return await run(clients(settings));
+    return await run(clients(settings, connectionProbe));
   } catch (error) {
     if (signal?.aborted) throw error;
+    if (error instanceof HostError) throw error;
     const failure = ConnectError.from(error);
     switch (failure.code) {
       case Code.Unauthenticated:
         throw new HostError('the host refused the token · copy it again from the host', 401);
       case Code.DeadlineExceeded:
+        throw new GitHubError('network', connectionProbe ? `connection timed out after ${TIMEOUT / 1000} seconds` : 'request timed out');
       case Code.Canceled:
-        throw new GitHubError('network', `could not reach ${settings.url}`);
+        throw new GitHubError('network', 'connection was canceled');
       case Code.Unknown:
       case Code.Unimplemented:
         // No answer at all (fetch threw), or something that is not hostd.
         // Saved answers stay on screen through this, labelled with their
         // age, the same as GitHub being out of reach.
         if (failure.cause instanceof TypeError || /fetch|network/i.test(failure.rawMessage)) {
-          throw new GitHubError('network', `could not reach ${settings.url}`);
+          const detail = settings.token
+            ? failure.rawMessage.split(settings.token).join('[redacted]')
+            : failure.rawMessage;
+          throw new GitHubError('network', detail || `could not reach ${settings.url}`);
         }
         throw new HostError(
           failure.code === Code.Unimplemented ? 'that answered, but it is not hostd · is this the old address?' : failure.rawMessage,
@@ -93,12 +101,21 @@ const options = (signal?: AbortSignal) => ({ signal, timeoutMs: TIMEOUT });
 
 /** Is anything there, is it `hostd`, and does it take the token: the connect form's check. */
 export async function probe(settings: HostSettings, signal?: AbortSignal): Promise<string> {
-  return call(settings, signal, async ({ host }) => {
-    const health = await host.health({}, options(signal));
-    if (!health.ok) throw new HostError('that answered, but it is not hostd');
-    await host.getOverview({ points: 1 }, options(signal));
-    return health.name || 'host';
-  });
+  let stage = 'contacting the host';
+  try {
+    return await call(settings, signal, async ({ host }) => {
+      const health = await host.health({}, options(signal));
+      if (!health.ok) throw new HostError('that answered, but it is not hostd');
+      stage = 'host reached · checking access';
+      await host.getOverview({ points: 1 }, options(signal));
+      return health.name || 'host';
+    }, true);
+  } catch (error) {
+    if (error instanceof GitHubError && error.kind === 'network') {
+      throw new GitHubError('network', `${stage} · ${error.message}`);
+    }
+    throw error;
+  }
 }
 
 export const fetchOverview = (settings: HostSettings, signal?: AbortSignal): Promise<Overview> =>

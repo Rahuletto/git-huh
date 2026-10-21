@@ -187,7 +187,7 @@ function Connect({
   const normal = normalizeUrl(url);
 
   const connect = async () => {
-    if (!normal) return;
+    if (!normal || phase.kind === 'checking') return;
     setPhase({ kind: 'checking' });
     const next = { url: normal, token: token.trim() };
     try {
@@ -200,7 +200,7 @@ function Connect({
         note: unreachable
           ? blockedInTheClear(normal)
             ? 'nothing answered · use the machine’s tailnet name (….ts.net), which this build may talk to without https'
-            : `nothing answered at ${normal}`
+            : error.message
           : explain(error, 'connecting'),
       });
     }
@@ -239,6 +239,7 @@ function Connect({
       />
       <View style={styles.formRow}>
         <IconPill
+          disabled={phase.kind === 'checking'}
           icon="server"
           label={phase.kind === 'checking' ? 'checking…' : 'connect'}
           on

@@ -219,7 +219,12 @@ compiled on a Mac.
   `src/lib/host.ts` (types, formatting, `squeeze`, the demo host — pure and
   tested), `src/lib/hostClient.ts` (the generated Connect client over
   `fetch`, binary protobuf, bearer token; the address and token in the
-  keystore), `src/lib/hostProto.ts` (proto messages → the types the screens
+  keystore; native connection probes use Connect JSON over `hostProbeFetch.ts`
+  to preserve DNS/TLS/socket error text. Setup errors identify whether Health
+  succeeded before checking access; normal reads still use binary protobuf.
+  Calls time out after 20 s, because a public Funnel address can take
+  several seconds to open a cold connection),
+  `src/lib/hostProto.ts` (proto messages → the types the screens
   draw, pure and tested), `proto/` (hostd's `.proto` files, copied from its
   repository; when they change, copy them again and run `npm run gen:host`,
   which writes `src/gen/` with `buf` and `protoc-gen-es`; `src/gen` is
