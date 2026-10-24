@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { scanPatch } from './boundedPatch';
 import { executeQuery, GitHubError } from './github';
 import { optionalRead, type ReadFailure } from './optionalRead';
 import { PULL_SUMMARY_FIELDS, pullSummarySchema, toPullSummary, type PullSummary } from './pullRequest';
@@ -15,8 +16,6 @@ import { rest } from './rest';
 const FILE_LIMIT = 20;
 const COMMENT_LIMIT = 25;
 const THREAD_LIMIT = 15;
-/** Lines of any one file's patch that get drawn before it is cut off. */
-const PATCH_LINES = 260;
 
 export type CommentKind = 'comment' | 'review' | 'thread';
 
@@ -296,58 +295,12 @@ const CONVERSATION_FIELDS = /* GraphQL */ `
  *
  * A unified diff carries its line numbers only in the `@@` headers; every
  * line after one is implicitly the next. Recovering them is the difference
- * between a diff you can talk about and a wall of green and red.
+ * between a diff you can talk about and a wall of green and red. The scan
+ * stops at the retained-line cap rather than splitting the whole patch into
+ * an array first, so a very large file never allocates every row.
  */
 export function parsePatch(patch: string): { lines: DiffLine[]; truncated: boolean } {
-  const out: DiffLine[] = [];
-  let oldLine = 0;
-  let newLine = 0;
-  let truncated = false;
-
-  const rows = patch.split('\n');
-  // A patch that ends in a newline splits to a trailing empty string, which
-  // would otherwise be drawn as one blank context line at the end of every
-  // file. Git writes a genuine blank context line as a single space.
-  if (rows.length > 0 && rows[rows.length - 1] === '') rows.pop();
-
-  for (const raw of rows) {
-    if (out.length >= PATCH_LINES) {
-      truncated = true;
-      break;
-    }
-
-    const header = /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@(.*)$/.exec(raw);
-    if (header) {
-      oldLine = Number(header[1]);
-      newLine = Number(header[2]);
-      out.push({
-        kind: 'meta',
-        // The trailing text on a hunk header is the enclosing function, which
-        // is the single most useful thing on the line.
-        text: header[3].trim() || `line ${newLine}`,
-        oldLine: null,
-        newLine: null,
-      });
-      continue;
-    }
-
-    if (raw.startsWith('+')) {
-      out.push({ kind: 'add', text: raw.slice(1), oldLine: null, newLine });
-      newLine += 1;
-    } else if (raw.startsWith('-')) {
-      out.push({ kind: 'del', text: raw.slice(1), oldLine, newLine: null });
-      oldLine += 1;
-    } else if (raw.startsWith('\\')) {
-      // "\ No newline at end of file" — real, and never worth a row.
-      continue;
-    } else {
-      out.push({ kind: 'context', text: raw.slice(1), oldLine, newLine });
-      oldLine += 1;
-      newLine += 1;
-    }
-  }
-
-  return { lines: out, truncated };
+  return scanPatch(patch);
 }
 
 async function fetchFiles(
