@@ -157,7 +157,7 @@ export function ThreadScreen({
 
           <Squiggle amplitude={2.6} length={body} opacity={0.4} style={styles.rule} wavelength={14} />
 
-          <Bounded source={thread.body} width={body} />
+          <Bounded href={thread.url} source={thread.body} width={body} />
 
           <View style={styles.bodyTools}>
             {type === 'discussion' && (
@@ -349,12 +349,12 @@ export function ThreadScreen({
 
 const POST_CAP = 4000;
 
-function Bounded({ source, width }: { source: string; width: number }) {
+function Bounded({ source, width, href }: { source: string; width: number; href?: string }) {
  const [open, setOpen] = useState(false);
  const cut = !open && source.length > POST_CAP;
  return (
  <View>
- <Markdown source={cut ? source.slice(0, POST_CAP) : source} width={width} />
+ <Markdown href={href} source={cut ? source.slice(0, POST_CAP) : source} width={width} />
  {source.length > POST_CAP && (
  <Pressable accessibilityRole="button" onPress={() => setOpen((value) => !value)}>
  <Label style={styles.note}>{cut ? 'cut short - show the rest' : 'show less'}</Label>

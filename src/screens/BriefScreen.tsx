@@ -50,7 +50,7 @@ export function BriefTile({ activity, loading }: { activity: Activity; loading: 
               {preview.status === 'loading' && !body ? (
               <Label style={styles.note}>reading the description…</Label>
             ) : (
-              <Markdown limit={260} source={body} width={width - space.gutter * 2 - 8} />
+              <Markdown href={pr.url} limit={260} source={body} width={width - space.gutter * 2 - 8} />
             )}
             </View>
           </Pressable>

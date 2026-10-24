@@ -161,7 +161,7 @@ export function PullScreen({ repo, number, initialTab = 'brief', sequence }: Pul
           >
             {tab === 'brief' && (
               <>
-                <Markdown source={pull.body} width={body} />
+                <Markdown href={pull.url} source={pull.body} width={body} />
                 <View style={styles.bodyReactions}>
                   <Reactions onChanged={() => changed('reaction')} reactions={pull.reactions} subjectId={pull.id} />
                 </View>
@@ -425,7 +425,7 @@ function Comment({
 
         {comment.diffHunk && <Hunk hunk={comment.diffHunk} />}
 
-        <Bounded source={comment.body} width={width - 34} />
+        <Bounded href={comment.url} source={comment.body} width={width - 34} />
 
         <CommentTools
           body={comment.body}
@@ -501,12 +501,12 @@ function kindOf(comment: PullComment): string {
 }
 
 
-function Bounded({ source, width }: { source: string; width: number }) {
+function Bounded({ source, width, href }: { source: string; width: number; href?: string }) {
   const [open, setOpen] = useState(false);
   const cut = !open && source.length > COMMENT_CAP;
   return (
     <View>
-      <Markdown source={cut ? source.slice(0, COMMENT_CAP) : source} width={width} />
+      <Markdown href={href} source={cut ? source.slice(0, COMMENT_CAP) : source} width={width} />
       {source.length > COMMENT_CAP && (
         <Pressable accessibilityRole="button" onPress={() => setOpen((value) => !value)}>
           <Label style={styles.note}>
