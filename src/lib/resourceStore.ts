@@ -13,8 +13,20 @@ export interface ResourceSnapshot<T> {
 
 type ResourceUpdate<T> = Partial<Omit<ResourceSnapshot<T>, 'version'>>;
 
+export interface ResourceWork<T> {
+  readonly generation: number;
+  readonly signal: AbortSignal;
+  readonly promise: Promise<T>;
+}
+
+interface ActiveResourceWork<T> extends ResourceWork<T> {
+  readonly controller: AbortController;
+}
+
 const snapshots = new Map<string, ResourceSnapshot<unknown>>();
 const listeners = new Map<string, Set<() => void>>();
+const generations = new Map<string, number>();
+const work = new Map<string, ActiveResourceWork<unknown>>();
 
 function initialSnapshot<T>(): ResourceSnapshot<T> {
   return {
@@ -50,6 +62,55 @@ export function publishResource<T>(key: string, update: ResourceUpdate<T>): void
   for (const listener of listeners.get(key) ?? []) listener();
 }
 
+export function publishResourceForGeneration<T>(
+  key: string,
+  generation: number,
+  update: ResourceUpdate<T>,
+): boolean {
+  if (!isCurrentResourceGeneration(key, generation)) return false;
+  publishResource(key, update);
+  return true;
+}
+
+export function isCurrentResourceGeneration(key: string, generation: number): boolean {
+  return (generations.get(key) ?? 0) === generation;
+}
+
+export function getResourceGeneration(key: string): number {
+  return generations.get(key) ?? 0;
+}
+
+export function startResourceWork<T>(
+  key: string,
+  load: (signal: AbortSignal) => Promise<T>,
+): ResourceWork<T> {
+  const current = work.get(key) as ActiveResourceWork<T> | undefined;
+  if (current) return current;
+
+  const generation = (generations.get(key) ?? 0) + 1;
+  generations.set(key, generation);
+  const controller = new AbortController();
+  let flight: ActiveResourceWork<T>;
+  const promise = Promise.resolve()
+    .then(() => load(controller.signal))
+    .finally(() => {
+      if (work.get(key) === flight) work.delete(key);
+    });
+  flight = { generation, signal: controller.signal, promise, controller };
+  work.set(key, flight as ActiveResourceWork<unknown>);
+  return flight;
+}
+
+/** Abort and invalidate the current request so its eventual result is obsolete. */
+export function cancelResourceWork(key: string): number {
+  const generation = (generations.get(key) ?? 0) + 1;
+  generations.set(key, generation);
+  const current = work.get(key);
+  work.delete(key);
+  current?.controller.abort();
+  return generation;
+}
+
 export function subscribeResource(key: string, listener: () => void): () => void {
   let resourceListeners = listeners.get(key);
   if (!resourceListeners) {
@@ -66,5 +127,7 @@ export function subscribeResource(key: string, listener: () => void): () => void
 /** Drop the snapshot after the owning remote entry has passed its idle grace period. */
 export function dropResourceSnapshot(key: string): void {
   if (listeners.has(key)) return;
+  cancelResourceWork(key);
   snapshots.delete(key);
+  generations.delete(key);
 }

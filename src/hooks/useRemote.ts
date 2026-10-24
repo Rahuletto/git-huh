@@ -3,9 +3,13 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import { GitHubError } from '../lib/github';
 import {
   dropResourceSnapshot,
+  cancelResourceWork,
+  isCurrentResourceGeneration,
   getResourceSnapshot,
+  getResourceGeneration,
   publishResource,
   subscribeResource,
+  startResourceWork,
 } from '../lib/resourceStore';
 import type { ResourceSnapshot } from '../lib/resourceStore';
 import { readSaved, writeSaved } from '../lib/store';
@@ -49,7 +53,6 @@ interface Entry<T> {
   subscribers: number;
   failure: RemoteFailure;
   error: unknown;
-  generation: number;
   /** Epoch ms of the last network success, for freshness. */
   freshAt: number | null;
   validate: ((value: unknown) => T | null) | null;
@@ -73,7 +76,6 @@ function entryFor<T>(key: string): Entry<T> {
       subscribers: 0,
       failure: null,
       error: null,
-      generation: 0,
       freshAt: null,
       validate: null,
       evict: null,
@@ -134,12 +136,13 @@ async function loadInto<T>(
 ): Promise<T> {
   const entry = entryFor<T>(key);
   if (entry.flight) return entry.flight;
-  const generation = entry.generation + 1;
-  entry.generation = generation;
-  const controller = new AbortController();
-  const flight = load(controller.signal)
+  const work = startResourceWork(key, load);
+  const flight = work.promise;
+  entry.flight = flight;
+  publish(entry);
+  return flight
     .then((value) => {
-      if (entry.generation !== generation) return value;
+      if (!isCurrentResourceGeneration(key, work.generation)) return value;
       entry.value = value;
       entry.at = Date.now();
       entry.origin = 'network';
@@ -152,7 +155,7 @@ async function loadInto<T>(
       return value;
     })
     .catch((error: unknown) => {
-      if (entry.generation === generation) {
+      if (isCurrentResourceGeneration(key, work.generation)) {
         entry.flight = null;
         if (!(error instanceof Error && error.name === 'AbortError')) {
           entry.failure = failureOf(error);
@@ -162,9 +165,6 @@ async function loadInto<T>(
       }
       throw error;
     });
-  entry.flight = flight;
-  publish(entry);
-  return flight;
 }
 
 /**
@@ -180,7 +180,8 @@ export function invalidateResource(key: string): void {
   entry.freshAt = null;
   entry.failure = null;
   entry.error = null;
-  entry.generation += 1;
+  cancelResourceWork(key);
+  entry.flight = null;
   publish(entry);
 }
 
@@ -195,8 +196,9 @@ export function invalidateResourceWhere(match: (key: string) => boolean): void {
 export function refreshResource(key: string): void {
   const entry = registry.get(key);
   if (!entry) return;
-  entry.generation += 1;
+  cancelResourceWork(key);
   entry.flight = null;
+  entry.freshAt = null;
   publish(entry);
 }
 
@@ -260,8 +262,9 @@ export function useRemote<T>(
   const reload = useCallback(() => {
     if (active) {
       const current = entryFor<T>(active);
-      current.generation += 1;
+      cancelResourceWork(active);
       current.flight = null;
+      current.freshAt = null;
     }
     setNonce((value) => value + 1);
   }, [active]);
@@ -272,11 +275,11 @@ export function useRemote<T>(
     if (entry.value !== undefined) return;
     if (!cacheKey) return;
     let cancelled = false;
-    const generation = entry.generation;
+    const generation = getResourceGeneration(active);
     readSaved<T>(cacheKey, validate ?? entry.validate ?? undefined).then((saved) => {
       if (cancelled || !saved) return;
       const current = entryFor<T>(active);
-      if (current.generation !== generation) return;
+      if (getResourceGeneration(active) !== generation) return;
       if (current.value !== undefined) return;
       current.value = saved.value;
       current.at = saved.at;
