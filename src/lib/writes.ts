@@ -2,7 +2,7 @@ import { Buffer } from 'buffer';
 import { z } from 'zod';
 
 import { firstFreePatchName, patchStem, timestampPatchName } from './branchName';
-import { executeQuery, GitHubError } from './github';
+import { executeMutation, GitHubError } from './github';
 import {
   clearProposal,
   loadProposal,
@@ -29,7 +29,7 @@ const ok = z.unknown();
 
 /** A reply at the bottom of a pull request's or an issue's conversation. */
 export async function addComment(token: string, subjectId: string, body: string) {
-  await executeQuery(
+  await executeMutation(
     token,
     /* GraphQL */ `
       mutation Reply($subjectId: ID!, $body: String!) {
@@ -37,7 +37,6 @@ export async function addComment(token: string, subjectId: string, body: string)
       }
     `,
     ok,
-    undefined,
     { subjectId, body },
   );
 }
@@ -51,7 +50,7 @@ export async function submitReview(
   event: ReviewEvent,
   body: string,
 ) {
-  await executeQuery(
+  await executeMutation(
     token,
     /* GraphQL */ `
       mutation Review($pullRequestId: ID!, $event: PullRequestReviewEvent!, $body: String) {
@@ -61,7 +60,6 @@ export async function submitReview(
       }
     `,
     ok,
-    undefined,
     { pullRequestId, event, body: body || null },
   );
 }
@@ -95,7 +93,7 @@ export async function addDiscussionComment(
   discussionId: string,
   body: string,
 ) {
-  await executeQuery(
+  await executeMutation(
     token,
     /* GraphQL */ `
       mutation Discuss($discussionId: ID!, $body: String!) {
@@ -105,7 +103,6 @@ export async function addDiscussionComment(
       }
     `,
     ok,
-    undefined,
     { discussionId, body },
   );
 }
@@ -461,7 +458,7 @@ export function encodePath(path: string): string {
 // assign, lock, follow, and — for a pull request — merge.
 
 async function mutate(token: string, mutation: string, variables: Record<string, unknown>) {
-  await executeQuery(token, mutation, ok, undefined, variables);
+  await executeMutation(token, mutation, ok, variables);
 }
 
 /** Any reactable thing: an issue, a pull request, a comment, a discussion. */
@@ -866,7 +863,7 @@ export async function createDiscussion(
   title: string,
   body: string,
 ): Promise<number> {
-  const data = await executeQuery(
+  const data = await executeMutation(
     token,
     /* GraphQL */ `mutation NewDiscussion($repositoryId: ID!, $categoryId: ID!, $title: String!, $body: String!) {
       createDiscussion(
@@ -874,7 +871,6 @@ export async function createDiscussion(
       ) { discussion { number } }
     }`,
     madeDiscussion,
-    undefined,
     { repositoryId, categoryId, title, body },
   );
   return data.createDiscussion.discussion.number;
