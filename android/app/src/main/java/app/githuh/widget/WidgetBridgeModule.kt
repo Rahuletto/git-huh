@@ -1,6 +1,7 @@
 package app.githuh.widget
 
 import android.content.Context
+import android.util.Log
 import androidx.glance.appwidget.updateAll
 import com.facebook.react.ReactPackage
 import com.facebook.react.bridge.NativeModule
@@ -11,11 +12,7 @@ import com.facebook.react.bridge.ReactMethod
 import com.facebook.react.uimanager.ViewManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.launch
-import java.util.concurrent.atomic.AtomicLong
 
 /**
  * JS → widget bridge. The React Native side owns GitHub API access; the
@@ -24,10 +21,9 @@ import java.util.concurrent.atomic.AtomicLong
  *
  * Redraws are one at a time. A burst of syncs used to launch a coroutine
  * each, and a slow one could finish after a newer account had already been
- * written. Each call takes a generation; the worker redraws the newest one
- * waiting when it finishes, so a stale sync cannot restore the account that
- * was just left. The worker is started with the first call, because that is
- * the first moment a context exists.
+ * written. The worker keeps only the newest request waiting when it finishes,
+ * so a stale sync cannot restore the account that was just left. A failed
+ * redraw is reported and does not prevent the next request from running.
  */
 class WidgetBridgeModule(
     private val reactContext: ReactApplicationContext,
@@ -75,33 +71,15 @@ class WidgetBridgeModule(
         private var lastWritten: String? = null
 
         private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-        private val ticks = Channel<Context>(Channel.CONFLATED)
-        private val generation = AtomicLong(0)
-        private var worker: Job? = null
+        private val redraws = WidgetRedrawWorker<Context>(
+            scope,
+            draw = { GitHuhWidget().updateAll(it) },
+            onFailure = { Log.w("GitHuhWidget", "Unable to redraw widget", it) },
+        )
 
         /** Recompose every placed card, coalesced with any redraw already waiting. */
         internal fun requestRedraw(context: Context) {
-            val app = context.applicationContext
-            generation.incrementAndGet()
-            synchronized(this) {
-                if (worker == null) {
-                    worker = scope.launch {
-                        var drawn = 0L
-                        for (target in ticks) {
-                            val mine = generation.get()
-                            if (mine == drawn) continue
-                            GitHuhWidget().updateAll(target)
-                            drawn = mine
-                            // A sync that landed during the redraw bumped the
-                            // generation and its tick may already have been
-                            // folded into this one. Ask again so that
-                            // generation is the one on screen.
-                            if (generation.get() != drawn) ticks.trySend(target)
-                        }
-                    }
-                }
-            }
-            ticks.trySend(app)
+            redraws.request(context.applicationContext)
         }
     }
 }

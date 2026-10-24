@@ -1,7 +1,6 @@
 package app.githuh.widget
 
 import android.graphics.Bitmap
-import java.util.LinkedHashMap
 
 /**
  * A small cache of bitmaps the card has already painted.
@@ -26,30 +25,16 @@ import java.util.LinkedHashMap
  * our references; the launcher keeps whatever it already took.
  */
 object WidgetBitmapCache {
-    private const val BUDGET = 2 * 1024 * 1024
+    private const val BUDGET = 2L * 1024 * 1024
 
-    private val entries = object : LinkedHashMap<String, Bitmap>(8, 0.75f, true) {
-        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Bitmap>?): Boolean = false
+    private val entries = WidgetBitmapEntries<Bitmap>(BUDGET) {
+        it.allocationByteCount.toLong()
     }
 
-    @Synchronized
-    fun get(key: String): Bitmap? = entries[key]
+    fun get(key: String): Bitmap? = entries.get(key)
 
-    @Synchronized
-    fun put(key: String, bitmap: Bitmap): Bitmap {
-        entries[key] = bitmap
-        while (bytes() > BUDGET && entries.size > 1) {
-            val eldest = entries.entries.firstOrNull() ?: break
-            entries.remove(eldest.key)
-        }
-        return bitmap
-    }
+    fun put(key: String, bitmap: Bitmap): Bitmap = entries.put(key, bitmap)
 
     /** Drop every picture. Called when the payload changes, never across one. */
-    @Synchronized
-    fun clear() {
-        entries.clear()
-    }
-
-    private fun bytes(): Int = entries.values.sumOf { it.allocationByteCount }
+    fun clear() = entries.clear()
 }
