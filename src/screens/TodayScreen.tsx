@@ -5,7 +5,8 @@ import { Micro } from '../components/Type';
 import { useFeedHistory } from '../hooks/useFeedHistory';
 import { HOME_BLOCKS, homeEvents } from '../lib/home';
 import type { SocialEvent } from '../lib/social';
-import { useSession } from '../shell/session';
+import { GitHubGate } from '../shell/SectionScreen';
+import { useSessionActions, useSessionData } from '../shell/session';
 import { colors, themed } from '../theme';
 import { ClockScreen } from './ClockScreen';
 import { FeedEnd, HeyScreen, HomeFeedRow } from './HeyScreen';
@@ -37,9 +38,8 @@ const Clock = memo(ClockScreen);
  * stays mounted; the charts stay the header.
  */
 export function TodayScreen({ active }: { active: boolean }) {
-  const session = useSession();
-  const { activity, activityState, home, lines, model, nav, openEvent, social, wantActivity } =
-    session;
+  const { nav, openEvent, wantActivity } = useSessionActions();
+  const { activity, activityState, home, lines, model, social } = useSessionData();
   const filterKey = home.blocks.join(',');
   const history = useFeedHistory(
     nav.token,
@@ -59,7 +59,9 @@ export function TodayScreen({ active }: { active: boolean }) {
     if (active && home.blocks.length > 0) history.more(false);
   }, [active, history, home.blocks.length]);
 
-  if (!model) return null;
+  // The shell mounts the tabs before the year is ready, so a missing model is
+  // an inline waiting or failure state, not a blank page.
+  if (!model) return <GitHubGate>{null}</GitHubGate>;
 
   const title =
     home.blocks.length === 0
