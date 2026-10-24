@@ -1,4 +1,4 @@
-import { Code, ConnectError, createClient, type Interceptor } from '@connectrpc/connect';
+import { Code, ConnectError, createClient, type Client, type Interceptor } from '@connectrpc/connect';
 import { createConnectTransport } from '@connectrpc/connect-web';
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
@@ -6,9 +6,10 @@ import { Platform } from 'react-native';
 import { HostService } from '../gen/hostd/v1/host_pb';
 import { SourceService } from '../gen/hostd/v1/source_pb';
 import { GitHubError } from './github';
-import { HostError, type HostSettings, type Overview, type Panel, type ServiceDetail } from './host';
+import { HostError, normalizeUrl, type HostSettings, type Overview, type Panel, type ServiceDetail } from './host';
 import { toOverview, toPanel, toServiceDetail } from './hostProto';
 import { hostProbeFetch } from './hostProbeFetch';
+import { keyOf } from './store';
 
 /**
  * Talking to `hostd`: where it is and its token (in the keystore, beside the
@@ -16,7 +17,7 @@ import { hostProbeFetch } from './hostProbeFetch';
  * section makes. They are gRPC services (`proto/hostd/v1`) spoken in the
  * Connect protocol, which is plain HTTP/1.1 POSTs — what `fetch` can do, with
  * no TLS and no HTTP/2 needed on the tailnet. Each call carries the bearer
- * token and gives up after ten seconds.
+ * token and gives up after twenty seconds.
  */
 
 const KEY = 'host_settings';
@@ -49,13 +50,41 @@ const POINTS = 120;
 // A public Funnel address can take several seconds to open a cold connection.
 const TIMEOUT = 20_000;
 
-function clients(settings: HostSettings, connectionProbe = false) {
+interface HostClients {
+  host: Client<typeof HostService>;
+  sources: Client<typeof SourceService>;
+}
+
+interface LiveConnection {
+  identity: string;
+  clients: HostClients;
+  /** How many times in a row this connection failed, for the wait between tries. */
+  failures: number;
+  /** When the next call may leave, after a run of failures. */
+  retryAt: number;
+  /** The host refused this token; only a settings change may ask again. */
+  refused: boolean;
+}
+
+/**
+ * One live connection. Polling every few seconds used to build a transport
+ * and two clients per call; those are the same objects for as long as the
+ * address and the token stay the same. A probe speaks JSON rather than
+ * binary, so it opens its own transport and does not replace this one.
+ */
+let live: LiveConnection | null = null;
+
+function connectionIdentity(settings: HostSettings): string {
+  return `${normalizeUrl(settings.url)}#${keyOf(settings.token)}`;
+}
+
+function openClients(settings: HostSettings, connectionProbe: boolean): HostClients {
   const bearer: Interceptor = (next) => (request) => {
     if (settings.token) request.header.set('Authorization', `Bearer ${settings.token}`);
     return next(request);
   };
   const transport = createConnectTransport({
-    baseUrl: settings.url,
+    baseUrl: normalizeUrl(settings.url),
     useBinaryFormat: !connectionProbe,
     fetch: connectionProbe && Platform.OS !== 'web' ? hostProbeFetch : undefined,
     interceptors: [bearer],
@@ -63,17 +92,82 @@ function clients(settings: HostSettings, connectionProbe = false) {
   return { host: createClient(HostService, transport), sources: createClient(SourceService, transport) };
 }
 
+/** The clients for this address and token. Ordinary polls share them. */
+function clients(settings: HostSettings): HostClients {
+  const identity = connectionIdentity(settings);
+  if (live?.identity === identity) return live.clients;
+  live = { identity, clients: openClients(settings, false), failures: 0, retryAt: 0, refused: false };
+  return live.clients;
+}
+
+/**
+ * Forget a connection whose settings were replaced or cleared. The next call
+ * opens a new client and is allowed to try again; a refusal only lasts until
+ * the credential changes.
+ */
+export function invalidateHostConnection(settings?: HostSettings): void {
+  if (!settings || !live || live.identity === connectionIdentity(settings)) live = null;
+}
+
+const REFUSAL = 'the host refused the token · copy it again from the host';
+
+function connectionFor(settings: HostSettings): LiveConnection {
+  const identity = connectionIdentity(settings);
+  if (live?.identity === identity) return live;
+  live = { identity, clients: openClients(settings, false), failures: 0, retryAt: 0, refused: false };
+  return live;
+}
+
+function noteSuccess(settings: HostSettings): void {
+  const current = connectionFor(settings);
+  current.failures = 0;
+  current.retryAt = 0;
+  current.refused = false;
+}
+
+function noteFailure(settings: HostSettings, refused: boolean): void {
+  const current = connectionFor(settings);
+  if (refused) {
+    current.refused = true;
+    return;
+  }
+  current.failures += 1;
+  // 2s, 4s, 8s … capped at a minute, so a host that is down is not asked at
+  // the panel's own interval on top of every poll.
+  const wait = Math.min(60_000, 2_000 * 2 ** Math.min(current.failures - 1, 5));
+  current.retryAt = Date.now() + wait;
+}
+
 /** One call, with the app's errors: the host's own words, or "could not reach". */
-async function call<T>(settings: HostSettings, signal: AbortSignal | undefined, run: (c: ReturnType<typeof clients>) => Promise<T>, connectionProbe = false): Promise<T> {
+async function call<T>(
+  settings: HostSettings,
+  signal: AbortSignal | undefined,
+  run: (c: HostClients) => Promise<T>,
+  connectionProbe = false,
+): Promise<T> {
+  if (!connectionProbe) {
+    const held = live?.identity === connectionIdentity(settings) ? live : null;
+    if (held?.refused) throw new HostError(REFUSAL, 401);
+    if (held && held.retryAt > Date.now()) {
+      throw new GitHubError('network', 'waiting before asking the host again');
+    }
+  }
   try {
-    return await run(clients(settings, connectionProbe));
+    const value = await run(connectionProbe ? openClients(settings, true) : clients(settings));
+    if (!connectionProbe) noteSuccess(settings);
+    return value;
   } catch (error) {
     if (signal?.aborted) throw error;
-    if (error instanceof HostError) throw error;
+    if (error instanceof HostError) {
+      if (!connectionProbe && error.status === 401) noteFailure(settings, true);
+      throw error;
+    }
     const failure = ConnectError.from(error);
+    const refused = failure.code === Code.Unauthenticated;
+    if (!connectionProbe) noteFailure(settings, refused);
     switch (failure.code) {
       case Code.Unauthenticated:
-        throw new HostError('the host refused the token · copy it again from the host', 401);
+        throw new HostError(REFUSAL, 401);
       case Code.DeadlineExceeded:
         throw new GitHubError('network', connectionProbe ? `connection timed out after ${TIMEOUT / 1000} seconds` : 'request timed out');
       case Code.Canceled:
@@ -118,14 +212,74 @@ export async function probe(settings: HostSettings, signal?: AbortSignal): Promi
   }
 }
 
+/**
+ * The last overview and service bodies handed to the screen, per connection.
+ * `useRemote` writes every successful answer, and a poll whose numbers did
+ * not move would rewrite a full snapshot. Returning the same object lets
+ * that write see an identical body and skip the disk, while the screen still
+ * refreshes on the samples that differ. There is no server delta: the whole
+ * answer still travels, and only the persistence is coalesced.
+ */
+const settled = new Map<string, { body: string; value: object }>();
+/** Samples handed back because they matched the previous one, so they are not written again. */
+const reused = new WeakSet<object>();
+
+/**
+ * True when this sample is the object already returned for the connection.
+ * The first sample of a connection is new and must be written; a later poll
+ * with the same body is the same object and must not be.
+ */
+export function hostSampleUnchanged(value: object): boolean {
+  return reused.has(value);
+}
+
+function settle<T extends object>(settings: HostSettings, kind: string, value: T): T {
+  const key = `${connectionIdentity(settings)}|${kind}`;
+  let body: string;
+  try {
+    body = stableJson(value);
+  } catch {
+    return value;
+  }
+  const previous = settled.get(key);
+  if (previous?.body === body) {
+    reused.add(previous.value);
+    return previous.value as T;
+  }
+  settled.set(key, { body, value });
+  return value;
+}
+
+/**
+ * JSON with object keys in a fixed order. A host that answers the same
+ * numbers with fields in a different order must still count as the same
+ * sample, or the snapshot is rewritten on every poll.
+ */
+function stableJson(value: unknown): string {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map((item) => stableJson(item)).join(',')}]`;
+  const record = value as Record<string, unknown>;
+  const keys = Object.keys(record).sort();
+  return `{${keys.map((key) => `${JSON.stringify(key)}:${stableJson(record[key])}`).join(',')}}`;
+}
+
+export function forgetSettled(settings: HostSettings): void {
+  const prefix = `${connectionIdentity(settings)}|`;
+  for (const key of settled.keys()) {
+    if (key.startsWith(prefix)) settled.delete(key);
+  }
+}
+
 export const fetchOverview = (settings: HostSettings, signal?: AbortSignal): Promise<Overview> =>
-  call(settings, signal, async ({ host }) => toOverview(await host.getOverview({ points: POINTS }, options(signal))));
+  call(settings, signal, async ({ host }) =>
+    settle(settings, 'overview', toOverview(await host.getOverview({ points: POINTS }, options(signal)))),
+  );
 
 export const fetchService = (settings: HostSettings, id: string, signal?: AbortSignal): Promise<ServiceDetail> =>
   call(settings, signal, async ({ host }) => {
     const detail = toServiceDetail(await host.getService({ id, points: POINTS }, options(signal)));
     if (!detail) throw new HostError(`the host has no service called ${id}`, 404);
-    return detail;
+    return settle(settings, `service:${id}`, detail);
   });
 
 export const fetchLogs = (settings: HostSettings, id: string, lines: number, signal?: AbortSignal) =>
