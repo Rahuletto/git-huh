@@ -64,3 +64,44 @@ test('a body inside both budgets is the whole answer', async () => {
   assert.equal(bounded.truncated, false);
   assert.equal(bounded.text, 'one\ntwo');
 });
+
+test('the no-reader fallback counts UTF-8 bytes without retaining a partial character', async () => {
+  const response = {
+    headers: new Headers(),
+    body: null,
+    text: async () => '🙂é',
+  } as Response;
+  const bounded = await readBounded(response, { maxBytes: 5 });
+  assert.equal(bounded.truncated, true);
+  assert.equal(bounded.text, '🙂');
+});
+
+test('a streamed byte cap cancels without retaining an incomplete UTF-8 character', async () => {
+  let cancelled = false;
+  const response = new Response(new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(new TextEncoder().encode('🙂é'));
+    },
+    cancel() {
+      cancelled = true;
+    },
+  }));
+  const bounded = await readBounded(response, { maxBytes: 5 });
+  assert.deepEqual(bounded, { text: '🙂', truncated: true });
+  assert.equal(cancelled, true);
+});
+
+test('a line cap cancels a stream before waiting for the remaining body', async () => {
+  let cancelled = false;
+  const response = new Response(new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(new TextEncoder().encode('one\ntwo\n'));
+    },
+    cancel() {
+      cancelled = true;
+    },
+  }));
+  const bounded = await readBounded(response, { maxLines: 2 });
+  assert.deepEqual(bounded, { text: 'one\ntwo', truncated: true });
+  assert.equal(cancelled, true);
+});

@@ -101,48 +101,56 @@ export async function rest<T = unknown>(
       },
       body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
       signal: deadline.signal,
+    }).catch((error: unknown) => {
+      throw transportFailure(error, deadline.timedOut(), open);
     });
-  } catch (error) {
-    throw transportFailure(error, deadline.timedOut(), open);
+
+    // 304 is not an error. The body is empty on purpose; the object we stored
+    // last time is the answer, and it is not parsed or written again.
+    if (response.status === 304 && cached) return cached.body;
+
+    if (!response.ok) {
+      throw await failure(response, token, deadline.signal).catch((error: unknown) => {
+        throw transportFailure(error, deadline.timedOut(), open);
+      });
+    }
+
+    if (response.status === 204) return undefined as T;
+
+    const bounded = await readBounded(response, options.budget, deadline.signal).catch(
+      (error: unknown) => {
+        throw transportFailure(error, deadline.timedOut(), open);
+      },
+    );
+    if (bounded.truncated) {
+      throw new GitHubError(
+        'api',
+        'GitHub sent more than this screen holds. The rest was left unread.',
+        'bounded',
+      );
+    }
+
+    const type = response.headers.get('content-type') ?? '';
+    if (!type.includes('json')) return bounded.text as T;
+
+    let data: unknown;
+    try {
+      data = JSON.parse(bounded.text);
+    } catch {
+      throw new GitHubError('api', 'GitHub sent back something this app does not understand.');
+    }
+    const parsed = options.schema ? parseAs(options.schema, data) : (data as T);
+    if (!write) {
+      writeCachedResponse(token, path, accept, {
+        body: parsed,
+        etag: response.headers.get('etag'),
+        lastModified: response.headers.get('last-modified'),
+      });
+    }
+    return parsed;
   } finally {
     deadline.dispose();
   }
-
-  // 304 is not an error. The body is empty on purpose; the object we stored
-  // last time is the answer, and it is not parsed or written again.
-  if (response.status === 304 && cached) return cached.body;
-
-  if (!response.ok) throw await failure(response, token);
-
-  if (response.status === 204) return undefined as T;
-
-  const bounded = await readBounded(response, options.budget);
-  if (bounded.truncated) {
-    throw new GitHubError(
-      'api',
-      'GitHub sent more than this screen holds. The rest was left unread.',
-      'bounded',
-    );
-  }
-
-  const type = response.headers.get('content-type') ?? '';
-  if (!type.includes('json')) return bounded.text as T;
-
-  let data: unknown;
-  try {
-    data = JSON.parse(bounded.text);
-  } catch {
-    throw new GitHubError('api', 'GitHub sent back something this app does not understand.');
-  }
-  const parsed = options.schema ? parseAs(options.schema, data) : (data as T);
-  if (!write) {
-    writeCachedResponse(token, path, accept, {
-      body: parsed,
-      etag: response.headers.get('etag'),
-      lastModified: response.headers.get('last-modified'),
-    });
-  }
-  return parsed;
 }
 
 /**
@@ -193,16 +201,22 @@ function transportFailure(error: unknown, timedOut: boolean, writeDispatched: bo
   return new GitHubError('network', 'Could not reach GitHub.', 'unsent');
 }
 
-async function failure(response: Response, token: string): Promise<GitHubError> {
+async function failure(
+  response: Response,
+  token: string,
+  signal: AbortSignal,
+): Promise<GitHubError> {
   let message = `GitHub responded with ${response.status}.`;
   try {
-    const body = (await response.json()) as {
+    const bounded = await readBounded(response, { maxBytes: 64 * 1024 }, signal);
+    const body = JSON.parse(bounded.text) as {
       message?: string;
       errors?: { message?: string; code?: string; field?: string }[];
     };
     const detail = body.errors?.find((error) => error.message)?.message;
     if (body.message) message = detail ? `${body.message}: ${detail}` : body.message;
-  } catch {
+  } catch (error) {
+    if (signal.aborted) throw error;
     // Not every error body is JSON; the status line is enough.
   }
 

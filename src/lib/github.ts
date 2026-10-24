@@ -339,6 +339,22 @@ export interface QueryOptions {
   budget?: ResponseBudget;
 }
 
+/** A write always retains mutation intent when it enters the shared transport. */
+export async function executeMutation<T>(
+  token: string,
+  mutation: string,
+  schema: z.ZodType<T>,
+  variables: Record<string, unknown>,
+  options?: Omit<QueryOptions, 'mutation' | 'variables'>,
+): Promise<T> {
+  if (options?.signal?.aborted) {
+    const error = new Error('The operation was aborted.');
+    error.name = 'AbortError';
+    throw error;
+  }
+  return executeQuery(token, mutation, schema, { ...options, mutation: true, variables });
+}
+
 /**
  * Shared by activity.ts, which runs its own queries against the same rules.
  *
@@ -383,69 +399,83 @@ export async function executeQuery<T>(
       },
       body: JSON.stringify(opts.variables ? { query, variables: opts.variables } : { query }),
       signal: deadline.signal,
+    }).catch((error: unknown) => {
+      throw graphqlTransportFailure(error, deadline.timedOut(), mutation, open);
     });
-  } catch (error) {
-    if (deadline.timedOut()) {
-      throw mutation
-        ? new GitHubError(
-            'network',
-            'GitHub did not answer in time. The change may already have landed.',
-            'timeout',
-          )
-        : deadlineError();
+
+    if (response.status === 401) {
+      throw new GitHubError('invalid-token', 'GitHub rejected this token.');
     }
-    if (error instanceof Error && error.name === 'AbortError') throw error;
-    throw new GitHubError(
-      'network',
-      open ? 'The reply was lost. Check before trying again.' : 'Could not reach GitHub.',
-      open ? 'unknown' : 'unsent',
+    if (response.status === 403 || response.status === 429) {
+      throw graphqlLimit(response, token);
+    }
+    if (!response.ok) {
+      throw new GitHubError('api', `GitHub responded with ${response.status}.`);
+    }
+
+    const bounded = await readBounded(response, opts.budget, deadline.signal).catch(
+      (error: unknown) => {
+        throw graphqlTransportFailure(error, deadline.timedOut(), mutation, open);
+      },
     );
+    if (bounded.truncated) {
+      throw new GitHubError('api', 'The answer was larger than this screen can hold.', 'bounded');
+    }
+    let body: GraphQLResponse;
+    try {
+      body = JSON.parse(bounded.text) as GraphQLResponse;
+    } catch {
+      throw unexpected();
+    }
+    const onlyMissing =
+      opts.missingIsAnswer &&
+      body.data != null &&
+      body.errors?.every((error) => error.type === 'NOT_FOUND');
+    if (body.errors?.length && !onlyMissing) {
+      const first = body.errors[0];
+      const message = first?.message ?? 'Unknown GraphQL error.';
+      const code = first?.extensions?.code ?? '';
+      if (code === 'RATE_LIMITED' || /rate limit/i.test(message)) {
+        throw new GitHubError('api', message, 'rate-limited');
+      }
+      const kind: GitHubErrorKind = /bad credentials/i.test(message)
+        ? 'invalid-token'
+        : first?.type === 'FORBIDDEN' || first?.type === 'INSUFFICIENT_SCOPES'
+          ? 'forbidden'
+          : first?.type === 'NOT_FOUND'
+            ? 'missing'
+            : 'api';
+      throw new GitHubError(kind, message);
+    }
+
+    return parseAs(schema, body.data);
   } finally {
     deadline.dispose();
   }
+}
 
-  if (response.status === 401) {
-    throw new GitHubError('invalid-token', 'GitHub rejected this token.');
-  }
-  if (response.status === 403 || response.status === 429) {
-    throw graphqlLimit(response, token);
-  }
-  if (!response.ok) {
-    throw new GitHubError('api', `GitHub responded with ${response.status}.`);
-  }
 
-  const bounded = await readBounded(response, opts.budget);
-  if (bounded.truncated) {
-    throw new GitHubError('api', 'The answer was larger than this screen can hold.', 'bounded');
+function graphqlTransportFailure(
+  error: unknown,
+  timedOut: boolean,
+  mutation: boolean,
+  dispatched: boolean,
+): GitHubError {
+  if (timedOut) {
+    return mutation
+      ? new GitHubError(
+          'network',
+          'GitHub did not answer in time. The change may already have landed.',
+          'timeout',
+        )
+      : deadlineError();
   }
-  let body: GraphQLResponse;
-  try {
-    body = JSON.parse(bounded.text) as GraphQLResponse;
-  } catch {
-    throw unexpected();
-  }
-  const onlyMissing =
-    opts.missingIsAnswer &&
-    body.data != null &&
-    body.errors?.every((error) => error.type === 'NOT_FOUND');
-  if (body.errors?.length && !onlyMissing) {
-    const first = body.errors[0];
-    const message = first?.message ?? 'Unknown GraphQL error.';
-    const code = first?.extensions?.code ?? '';
-    if (code === 'RATE_LIMITED' || /rate limit/i.test(message)) {
-      throw new GitHubError('api', message, 'rate-limited');
-    }
-    const kind: GitHubErrorKind = /bad credentials/i.test(message)
-      ? 'invalid-token'
-      : first?.type === 'FORBIDDEN' || first?.type === 'INSUFFICIENT_SCOPES'
-        ? 'forbidden'
-        : first?.type === 'NOT_FOUND'
-          ? 'missing'
-          : 'api';
-    throw new GitHubError(kind, message);
-  }
-
-  return parseAs(schema, body.data);
+  if (error instanceof Error && error.name === 'AbortError') throw error;
+  return new GitHubError(
+    'network',
+    dispatched ? 'The reply was lost. Check before trying again.' : 'Could not reach GitHub.',
+    dispatched ? 'unknown' : 'unsent',
+  );
 }
 
 function graphqlLimit(response: Response, token: string): GitHubError {

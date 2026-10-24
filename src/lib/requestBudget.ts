@@ -82,59 +82,122 @@ export function deadlineError(): GitHubError {
 export async function readBounded(
   response: Response,
   budget: ResponseBudget = {},
+  signal?: AbortSignal,
 ): Promise<BudgetResult> {
+  if (signal?.aborted) {
+    void response.body?.cancel().catch(() => {});
+    throw abortError();
+  }
   const advertised = Number(response.headers.get('content-length'));
   if (
     budget.maxBytes != null &&
     Number.isFinite(advertised) &&
     advertised > budget.maxBytes
   ) {
+    void response.body?.cancel().catch(() => {});
     return { text: '', truncated: true };
-  }
-
-  if (budget.maxBytes == null && budget.maxLines == null) {
-    return { text: await response.text(), truncated: false };
   }
 
   const reader = response.body?.getReader();
   if (!reader) {
-    const text = await response.text();
+    const text = await waitForBody(response.text(), signal);
     return clipText(text, budget);
   }
 
   const decoder = new TextDecoder();
   let text = '';
   let bytes = 0;
+  let lines = 0;
   let truncated = false;
-  const cap = budget.maxBytes ?? Number.POSITIVE_INFINITY;
+  const cap = budget.maxBytes == null ? Number.POSITIVE_INFINITY : Math.max(0, budget.maxBytes);
+  const lineCap = budget.maxLines == null ? Number.POSITIVE_INFINITY : Math.max(0, budget.maxLines);
+  const cancel = () => { void reader.cancel().catch(() => {}); };
+  const append = (part: string) => {
+    if (lineCap === Number.POSITIVE_INFINITY) {
+      text += part;
+      return true;
+    }
+    if (lineCap === 0) return false;
+    for (let i = 0; i < part.length; i += 1) {
+      if (part[i] !== '\n') continue;
+      lines += 1;
+      if (lines >= lineCap) {
+        text += part.slice(0, i);
+        return false;
+      }
+    }
+    text += part;
+    return true;
+  };
   try {
     for (;;) {
-      const { done, value } = await reader.read();
+      const { done, value } = await waitForBody(reader.read(), signal, cancel);
       if (done) break;
       bytes += value.byteLength;
       if (bytes > cap) {
         const keep = value.byteLength - (bytes - cap);
-        if (keep > 0) text += decoder.decode(value.subarray(0, keep), { stream: true });
+        if (keep > 0) append(decoder.decode(value.subarray(0, keep), { stream: true }));
         truncated = true;
-        await reader.cancel();
+        cancel();
         break;
       }
-      text += decoder.decode(value, { stream: true });
+      if (!append(decoder.decode(value, { stream: true }))) {
+        truncated = true;
+        cancel();
+        break;
+      }
     }
+    if (!truncated) truncated = !append(decoder.decode());
   } finally {
     reader.releaseLock();
   }
-  text += decoder.decode();
-  const clipped = clipText(text, budget);
-  return { text: clipped.text, truncated: truncated || clipped.truncated };
+  return { text, truncated };
 }
 
 function clipText(text: string, budget: ResponseBudget): BudgetResult {
-  if (budget.maxBytes != null && text.length > budget.maxBytes) {
-    text = text.slice(0, budget.maxBytes);
-    return finish(text, budget, true);
+  if (budget.maxBytes != null) {
+    const encoded = new TextEncoder().encode(text);
+    if (encoded.byteLength > budget.maxBytes) {
+      text = new TextDecoder().decode(encoded.subarray(0, Math.max(0, budget.maxBytes)), {
+        stream: true,
+      });
+      return finish(text, budget, true);
+    }
   }
   return finish(text, budget, false);
+}
+
+function abortError(): Error {
+  const error = new Error('The operation was aborted.');
+  error.name = 'AbortError';
+  return error;
+}
+
+async function waitForBody<T>(
+  pending: Promise<T>,
+  signal?: AbortSignal,
+  cancel?: () => void,
+): Promise<T> {
+  if (!signal) return pending;
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => {
+      cancel?.();
+      reject(abortError());
+    };
+    pending.then(
+      (value) => {
+        signal.removeEventListener('abort', onAbort);
+        if (signal.aborted) reject(abortError());
+        else resolve(value);
+      },
+      (error: unknown) => {
+        signal.removeEventListener('abort', onAbort);
+        reject(error);
+      },
+    );
+    if (signal.aborted) onAbort();
+    else signal.addEventListener('abort', onAbort, { once: true });
+  });
 }
 
 function finish(text: string, budget: ResponseBudget, already: boolean): BudgetResult {
