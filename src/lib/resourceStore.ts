@@ -26,7 +26,10 @@ interface ActiveResourceWork<T> extends ResourceWork<T> {
 const snapshots = new Map<string, ResourceSnapshot<unknown>>();
 const listeners = new Map<string, Set<() => void>>();
 const generations = new Map<string, number>();
+const hydrationGenerations = new Map<string, number>();
 const work = new Map<string, ActiveResourceWork<unknown>>();
+let nextWorkGeneration = 0;
+let nextHydrationGeneration = 0;
 
 function initialSnapshot<T>(): ResourceSnapshot<T> {
   return {
@@ -62,6 +65,37 @@ export function publishResource<T>(key: string, update: ResourceUpdate<T>): void
   for (const listener of listeners.get(key) ?? []) listener();
 }
 
+export function getResourceHydrationGeneration(key: string): number {
+  let generation = hydrationGenerations.get(key);
+  if (generation === undefined) {
+    generation = ++nextHydrationGeneration;
+    hydrationGenerations.set(key, generation);
+  }
+  return generation;
+}
+
+export function invalidateResourceHydration(key: string): number {
+  const generation = ++nextHydrationGeneration;
+  hydrationGenerations.set(key, generation);
+  return generation;
+}
+
+export function publishHydratedResource<T>(
+  key: string,
+  generation: number,
+  update: ResourceUpdate<T>,
+): boolean {
+  if (getResourceHydrationGeneration(key) !== generation) return false;
+  if (getResourceSnapshot<T>(key).value !== undefined) return false;
+  publishResource(key, update);
+  return true;
+}
+
+export function publishNetworkResource<T>(key: string, update: ResourceUpdate<T>): void {
+  invalidateResourceHydration(key);
+  publishResource(key, update);
+}
+
 export function publishResourceForGeneration<T>(
   key: string,
   generation: number,
@@ -76,10 +110,6 @@ export function isCurrentResourceGeneration(key: string, generation: number): bo
   return (generations.get(key) ?? 0) === generation;
 }
 
-export function getResourceGeneration(key: string): number {
-  return generations.get(key) ?? 0;
-}
-
 export function startResourceWork<T>(
   key: string,
   load: (signal: AbortSignal) => Promise<T>,
@@ -87,7 +117,7 @@ export function startResourceWork<T>(
   const current = work.get(key) as ActiveResourceWork<T> | undefined;
   if (current) return current;
 
-  const generation = (generations.get(key) ?? 0) + 1;
+  const generation = ++nextWorkGeneration;
   generations.set(key, generation);
   const controller = new AbortController();
   let flight: ActiveResourceWork<T>;
@@ -103,7 +133,7 @@ export function startResourceWork<T>(
 
 /** Abort and invalidate the current request so its eventual result is obsolete. */
 export function cancelResourceWork(key: string): number {
-  const generation = (generations.get(key) ?? 0) + 1;
+  const generation = ++nextWorkGeneration;
   generations.set(key, generation);
   const current = work.get(key);
   work.delete(key);
@@ -118,9 +148,14 @@ export function subscribeResource(key: string, listener: () => void): () => void
     listeners.set(key, resourceListeners);
   }
   resourceListeners.add(listener);
+  let subscribed = true;
   return () => {
+    if (!subscribed) return;
+    subscribed = false;
     resourceListeners?.delete(listener);
-    if (resourceListeners?.size === 0) listeners.delete(key);
+    if (resourceListeners?.size === 0 && listeners.get(key) === resourceListeners) {
+      listeners.delete(key);
+    }
   };
 }
 
@@ -128,6 +163,8 @@ export function subscribeResource(key: string, listener: () => void): () => void
 export function dropResourceSnapshot(key: string): void {
   if (listeners.has(key)) return;
   cancelResourceWork(key);
+  invalidateResourceHydration(key);
   snapshots.delete(key);
   generations.delete(key);
+  hydrationGenerations.delete(key);
 }

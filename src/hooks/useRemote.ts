@@ -6,7 +6,10 @@ import {
   cancelResourceWork,
   isCurrentResourceGeneration,
   getResourceSnapshot,
-  getResourceGeneration,
+  getResourceHydrationGeneration,
+  invalidateResourceHydration,
+  publishHydratedResource,
+  publishNetworkResource,
   publishResource,
   subscribeResource,
   startResourceWork,
@@ -112,7 +115,10 @@ function subscribe(key: string, listener: () => void): () => void {
     clearTimeout(entry.evict);
     entry.evict = null;
   }
+  let subscribed = true;
   return () => {
+    if (!subscribed) return;
+    subscribed = false;
     unsubscribe();
     entry.subscribers -= 1;
     if (entry.subscribers > 0) return;
@@ -150,7 +156,16 @@ async function loadInto<T>(
       entry.failure = null;
       entry.error = null;
       entry.flight = null;
-      publish(entry);
+      publishNetworkResource(key, {
+        value: entry.value,
+        error: entry.error,
+        loading: false,
+        refreshing: false,
+        savedAt: null,
+        freshAt: entry.freshAt,
+        origin: entry.origin,
+        failure: entry.failure,
+      });
       if (cacheKey && persist) writeSaved(cacheKey, value).catch(() => {});
       return value;
     })
@@ -180,6 +195,7 @@ export function invalidateResource(key: string): void {
   entry.freshAt = null;
   entry.failure = null;
   entry.error = null;
+  invalidateResourceHydration(key);
   cancelResourceWork(key);
   entry.flight = null;
   publish(entry);
@@ -197,6 +213,7 @@ export function refreshResource(key: string): void {
   const entry = registry.get(key);
   if (!entry) return;
   cancelResourceWork(key);
+  invalidateResourceHydration(key);
   entry.flight = null;
   entry.freshAt = null;
   publish(entry);
@@ -263,6 +280,7 @@ export function useRemote<T>(
     if (active) {
       const current = entryFor<T>(active);
       cancelResourceWork(active);
+      invalidateResourceHydration(active);
       current.flight = null;
       current.freshAt = null;
     }
@@ -275,16 +293,25 @@ export function useRemote<T>(
     if (entry.value !== undefined) return;
     if (!cacheKey) return;
     let cancelled = false;
-    const generation = getResourceGeneration(active);
+    const generation = getResourceHydrationGeneration(active);
     readSaved<T>(cacheKey, validate ?? entry.validate ?? undefined).then((saved) => {
       if (cancelled || !saved) return;
       const current = entryFor<T>(active);
-      if (getResourceGeneration(active) !== generation) return;
+      if (getResourceHydrationGeneration(active) !== generation) return;
       if (current.value !== undefined) return;
       current.value = saved.value;
       current.at = saved.at;
       current.origin = 'disk';
-      publish(current);
+      publishHydratedResource(active, generation, {
+        value: current.value,
+        error: current.error,
+        loading: current.flight === null,
+        refreshing: current.flight !== null,
+        savedAt: current.at,
+        freshAt: current.freshAt,
+        origin: current.origin,
+        failure: current.failure,
+      });
     });
     return () => {
       cancelled = true;

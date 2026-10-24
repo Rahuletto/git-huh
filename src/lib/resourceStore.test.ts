@@ -3,10 +3,14 @@ import { test } from 'node:test';
 
 import {
   cancelResourceWork,
+  dropResourceSnapshot,
+  getResourceHydrationGeneration,
   getResourceSnapshot,
   isCurrentResourceGeneration,
   publishResource,
   publishResourceForGeneration,
+  publishHydratedResource,
+  publishNetworkResource,
   startResourceWork,
   subscribeResource,
 } from './resourceStore';
@@ -27,6 +31,21 @@ test('publishing replaces the stable resource snapshot before notifying listener
   assert.equal(next.value, 'loaded');
   assert.equal(getResourceSnapshot(key), next);
   unsubscribe();
+});
+
+test('unsubscribe is idempotent and does not remove a later subscriber', () => {
+  const key = 'resource-store-subscribe-lifecycle';
+  const firstUnsubscribe = subscribeResource(key, () => {});
+  firstUnsubscribe();
+
+  let notifications = 0;
+  subscribeResource(key, () => {
+    notifications += 1;
+  });
+  firstUnsubscribe();
+  publishResource(key, { value: 'latest' });
+
+  assert.equal(notifications, 1);
 });
 
 test('cancelling a resource aborts its old work and prevents late publication', async () => {
@@ -59,4 +78,82 @@ test('cancelling a resource aborts its old work and prevents late publication', 
     false,
   );
   assert.equal(getResourceSnapshot<string>(key).value, 'current');
+});
+
+test('disk hydration may publish while network is pending, then network replaces it', () => {
+  const key = 'resource-store-disk-before-network';
+  const hydration = getResourceHydrationGeneration(key);
+  publishResource(key, { loading: true });
+
+  assert.equal(
+    publishHydratedResource(key, hydration, {
+      value: 'disk',
+      origin: 'disk',
+      savedAt: 10,
+    }),
+    true,
+  );
+  assert.equal(getResourceSnapshot<string>(key).value, 'disk');
+
+  publishNetworkResource(key, {
+    value: 'network',
+    origin: 'network',
+    freshAt: 20,
+    loading: false,
+  });
+  assert.equal(getResourceSnapshot<string>(key).value, 'network');
+});
+
+test('late disk hydration cannot replace a completed network value', () => {
+  const key = 'resource-store-network-before-disk';
+  const hydration = getResourceHydrationGeneration(key);
+  publishNetworkResource(key, {
+    value: 'network',
+    origin: 'network',
+    freshAt: 20,
+    loading: false,
+  });
+
+  assert.equal(
+    publishHydratedResource(key, hydration, {
+      value: 'disk',
+      origin: 'disk',
+      savedAt: 10,
+    }),
+    false,
+  );
+  assert.equal(getResourceSnapshot<string>(key).value, 'network');
+});
+
+test('evicting and reopening a key cannot reuse an old request generation', async () => {
+  const key = 'resource-store-eviction-generation';
+  let resolveOld!: (value: string) => void;
+  const old = startResourceWork(
+    key,
+    () =>
+      new Promise<string>((resolve) => {
+        resolveOld = resolve;
+      }),
+  );
+  void old.promise.catch(() => {});
+  await Promise.resolve();
+
+  dropResourceSnapshot(key);
+  const reopened = startResourceWork(key, async () => 'new');
+  assert.notEqual(reopened.generation, old.generation);
+  assert.equal(await reopened.promise, 'new');
+
+  resolveOld('old');
+  await old.promise;
+  assert.equal(isCurrentResourceGeneration(key, old.generation), false);
+});
+
+test('evicting and reopening a key cannot reuse an old hydration generation', () => {
+  const key = 'resource-store-eviction-hydration';
+  const oldGeneration = getResourceHydrationGeneration(key);
+
+  dropResourceSnapshot(key);
+  const newGeneration = getResourceHydrationGeneration(key);
+
+  assert.notEqual(newGeneration, oldGeneration);
 });
