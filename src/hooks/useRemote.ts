@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 
 import { GitHubError } from '../lib/github';
+import {
+  dropResourceSnapshot,
+  getResourceSnapshot,
+  publishResource,
+  subscribeResource,
+} from '../lib/resourceStore';
+import type { ResourceSnapshot } from '../lib/resourceStore';
 import { readSaved, writeSaved } from '../lib/store';
 
 /** Why the last attempt failed, when the screen still has something to show. */
@@ -33,6 +40,7 @@ export type Remote<T> =
   | { status: 'error'; error: unknown; failure?: RemoteFailure };
 
 interface Entry<T> {
+  key: string;
   value: T | undefined;
   at: number | null;
   /** Where the current value came from. Disk answers keep their written time. */
@@ -45,7 +53,6 @@ interface Entry<T> {
   /** Epoch ms of the last network success, for freshness. */
   freshAt: number | null;
   validate: ((value: unknown) => T | null) | null;
-  listeners: Set<() => void>;
   evict: ReturnType<typeof setTimeout> | null;
 }
 
@@ -58,6 +65,7 @@ function entryFor<T>(key: string): Entry<T> {
   let entry = registry.get(key) as Entry<T> | undefined;
   if (!entry) {
     entry = {
+      key,
       value: undefined,
       at: null,
       origin: null,
@@ -68,7 +76,6 @@ function entryFor<T>(key: string): Entry<T> {
       generation: 0,
       freshAt: null,
       validate: null,
-      listeners: new Set(),
       evict: null,
     };
     registry.set(key, entry as Entry<unknown>);
@@ -77,7 +84,16 @@ function entryFor<T>(key: string): Entry<T> {
 }
 
 function publish(entry: Entry<unknown>): void {
-  for (const listener of entry.listeners) listener();
+  publishResource(entry.key, {
+    value: entry.value,
+    error: entry.error,
+    loading: entry.value === undefined && entry.flight !== null,
+    refreshing: entry.value !== undefined && entry.flight !== null,
+    savedAt: entry.origin === 'disk' ? entry.at : null,
+    freshAt: entry.freshAt,
+    origin: entry.origin,
+    failure: entry.failure,
+  });
 }
 
 function failureOf(error: unknown): RemoteFailure {
@@ -88,26 +104,25 @@ function failureOf(error: unknown): RemoteFailure {
 
 function subscribe(key: string, listener: () => void): () => void {
   const entry = entryFor(key);
-  entry.listeners.add(listener);
+  const unsubscribe = subscribeResource(key, listener);
   entry.subscribers += 1;
   if (entry.evict) {
     clearTimeout(entry.evict);
     entry.evict = null;
   }
   return () => {
-    entry.listeners.delete(listener);
+    unsubscribe();
     entry.subscribers -= 1;
     if (entry.subscribers > 0) return;
     // Nobody is looking. Keep the value briefly so a tab switch does not
     // throw away a payload it is about to ask for again, then drop it.
     entry.evict = setTimeout(() => {
-      if (entry.subscribers === 0) registry.delete(key);
+      if (entry.subscribers === 0) {
+        registry.delete(key);
+        dropResourceSnapshot(key);
+      }
     }, EVICT_AFTER_MS);
   };
-}
-
-function snapshot<T>(key: string): Entry<T> {
-  return entryFor<T>(key);
 }
 
 async function loadInto<T>(
@@ -231,14 +246,15 @@ export function useRemote<T>(
   });
 
   const active = key != null && demo === undefined ? key : null;
-  const entry = useSyncExternalStore(
+  const state = useSyncExternalStore(
     useCallback(
       (listener: () => void) => (active ? subscribe(active, listener) : () => {}),
       [active],
     ),
-    useCallback(() => (active ? snapshot<T>(active) : null), [active]),
-    useCallback(() => (active ? snapshot<T>(active) : null), [active]),
+    useCallback(() => (active ? getResourceSnapshot<T>(active) : null), [active]),
+    useCallback(() => (active ? getResourceSnapshot<T>(active) : null), [active]),
   );
+  const entry = active ? entryFor<T>(active) : null;
 
   const [nonce, setNonce] = useState(0);
   const reload = useCallback(() => {
@@ -251,7 +267,7 @@ export function useRemote<T>(
   }, [active]);
 
   useEffect(() => {
-    if (!active || !entry) return;
+    if (!active || !entry || !state) return;
     if (validate) entryFor<T>(active).validate = validate;
     if (entry.value !== undefined) return;
     if (!cacheKey) return;
@@ -270,10 +286,10 @@ export function useRemote<T>(
     return () => {
       cancelled = true;
     };
-  }, [active, cacheKey, entry, validate]);
+  }, [active, cacheKey, entry, state, validate]);
 
   useEffect(() => {
-    if (!active || !entry) return;
+    if (!active || !entry || !state) return;
     const fresh =
       entry.freshAt != null &&
       (staleAfterMs == null || Date.now() - entry.freshAt < staleAfterMs);
@@ -287,24 +303,24 @@ export function useRemote<T>(
     return () => {
       cancelled = true;
     };
-  }, [active, cacheKey, entry, nonce, persist, staleAfterMs, validate]);
+  }, [active, cacheKey, entry, nonce, persist, staleAfterMs, state, validate]);
 
   return useMemo(
-    () => derive({ key, demo, entry, reload, staleAfterMs }),
-    [demo, entry, key, reload, staleAfterMs],
+    () => derive({ key, demo, snapshot: state, reload, staleAfterMs }),
+    [demo, key, reload, staleAfterMs, state],
   );
 }
 
 function derive<T>({
   key,
   demo,
-  entry,
+  snapshot,
   reload,
   staleAfterMs,
 }: {
   key: string | null;
   demo: T | undefined;
-  entry: Entry<T> | null;
+  snapshot: ResourceSnapshot<T> | null;
   reload: () => void;
   staleAfterMs: number | undefined;
 }): Remote<T> & { reload: () => void } {
@@ -321,32 +337,32 @@ function derive<T>({
       reload,
     };
   }
-  if (!entry || entry.value === undefined) {
-    if (entry?.failure && entry.error != null && entry.flight == null) {
-      return { status: 'error', error: entry.error, failure: entry.failure, reload };
+  if (!snapshot || snapshot.value === undefined) {
+    if (snapshot?.failure && snapshot.error != null && !snapshot.loading) {
+      return { status: 'error', error: snapshot.error, failure: snapshot.failure as RemoteFailure, reload };
     }
     return { status: 'loading', reload };
   }
 
   const stale =
     staleAfterMs != null &&
-    entry.freshAt != null &&
-    Date.now() - entry.freshAt >= staleAfterMs;
-  const fromDisk = entry.origin === 'disk';
-  const failed = entry.failure;
+    snapshot.freshAt != null &&
+    Date.now() - snapshot.freshAt >= staleAfterMs;
+  const fromDisk = snapshot.origin === 'disk';
+  const failed = snapshot.failure as RemoteFailure;
 
-  if (failed === 'invalid-token' && entry.flight == null && entry.origin !== 'network') {
-    return { status: 'error', error: entry.error, failure: failed, reload };
+  if (failed === 'invalid-token' && !snapshot.refreshing && snapshot.origin !== 'network') {
+    return { status: 'error', error: snapshot.error, failure: failed, reload };
   }
 
   return {
     status: 'ready',
-    data: entry.value,
-    savedAt: fromDisk ? entry.at : null,
+    data: snapshot.value,
+    savedAt: fromDisk ? snapshot.savedAt : null,
     offline: failed === 'network',
-    refreshing: entry.flight != null,
+    refreshing: snapshot.refreshing,
     failure: failed,
-    stale: stale || (fromDisk && entry.flight != null),
+    stale: stale || (fromDisk && snapshot.refreshing),
     reload,
   };
 }
