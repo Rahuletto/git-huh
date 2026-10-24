@@ -21,6 +21,7 @@ import { Block, ScreenHead, VirtualPage } from './shared';
 const Hey = memo(HeyScreen);
 const Now = memo(NowScreen);
 const Clock = memo(ClockScreen);
+const FeedRow = memo(HomeFeedRow);
 
 /**
  * `today` — how am I doing — as one page, read top to bottom:
@@ -58,6 +59,10 @@ export function TodayScreen({ active }: { active: boolean }) {
   const pageMore = useCallback(() => {
     if (active && home.blocks.length > 0) history.more(false);
   }, [active, history, home.blocks.length]);
+  const renderItem = useCallback(
+    ({ item }: { item: SocialEvent }) => <FeedRow event={item} onOpen={openEvent} />,
+    [openEvent],
+  );
 
   // The shell mounts the tabs before the year is ready, so a missing model is
   // an inline waiting or failure state, not a blank page.
@@ -114,19 +119,13 @@ export function TodayScreen({ active }: { active: boolean }) {
       keyExtractor={keyOf}
       onDeep={wantActivity}
       onEnd={pageMore}
-      renderItem={renderRow(openEvent)}
+      renderItem={renderItem}
     />
   );
 }
 
 function keyOf(event: SocialEvent): string {
   return event.id;
-}
-
-function renderRow(onOpen: (event: SocialEvent) => void) {
-  return function row({ item }: { item: SocialEvent }) {
-    return <HomeFeedRow event={item} onOpen={onOpen} />;
-  };
 }
 
 const styles = themed(() =>

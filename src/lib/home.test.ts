@@ -76,25 +76,36 @@ function page(after: string | null, ids: string[], next: string | null): History
 }
 
 test('retained history drops the newest pages once the window is full', () => {
-  let window: HistoryWindow = { pages: [], ids: new Set<string>() };
+  let window: HistoryWindow = { pages: [] };
   for (let i = 0; i < HISTORY_WINDOW + 2; i++) {
     window = retainHistory(window, page(i === 0 ? null : `c${i}`, [`p${i}`], `c${i + 1}`));
   }
   assert.equal(window.pages.length, HISTORY_WINDOW);
   assert.equal(window.pages[0]?.after, 'c2');
   assert.equal(historyEvents(window).some((event) => event.id === 'p0'), false);
-  assert.equal(window.ids.has('p0'), false);
-  assert.equal(window.ids.has(`p${HISTORY_WINDOW + 1}`), true);
+  assert.equal(historyEvents(window).some((event) => event.id === `p${HISTORY_WINDOW + 1}`), true);
   assert.equal(window.pages.at(-1)?.next, `c${HISTORY_WINDOW + 2}`);
 });
 
 test('an id that leaves the window is dropped even when a later page repeats it', () => {
   const first = page(null, ['shared', 'old'], 'c1');
   const second = page('c1', ['shared', 'new'], null);
-  const window = retainHistory(retainHistory({ pages: [], ids: new Set() }, first, 1), second, 1);
+  const window = retainHistory(retainHistory({ pages: [] }, first, 1), second, 1);
   assert.equal(window.pages.length, 1);
-  assert.equal(window.ids.has('old'), false);
-  assert.equal(window.ids.has('shared'), true);
-  assert.equal(window.ids.has('new'), true);
+  assert.deepEqual(historyEvents(window).map((row) => row.id), ['shared', 'new']);
   assert.equal(historyEvents(window).some((row) => row.id === 'old'), false);
+});
+
+test('overlapping history pages expose each event once, keeping the newest copy', () => {
+  const newest = event('shared', 'comment', '2026-01-03T00:00:00Z');
+  const older = event('shared', 'comment', '2026-01-01T00:00:00Z');
+  const window = retainHistory(
+    retainHistory(
+      { pages: [] },
+      { after: null, events: [newest], next: 'c1' },
+    ),
+    { after: 'c1', events: [older], next: null },
+  );
+
+  assert.deepEqual(historyEvents(window), [newest]);
 });

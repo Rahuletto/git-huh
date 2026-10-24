@@ -42,24 +42,27 @@ export interface HistoryPage {
 
 export interface HistoryWindow {
   pages: HistoryPage[];
-  /** Ids of events still in the window, kept incrementally as pages move. */
-  ids: ReadonlySet<string>;
 }
 
-export const EMPTY_HISTORY: HistoryWindow = { pages: [], ids: new Set() };
+export const EMPTY_HISTORY: HistoryWindow = { pages: [] };
 
 /** Events still held, newest page first. */
 export function historyEvents(window: HistoryWindow): SocialEvent[] {
-  return window.pages.flatMap((page) => page.events);
+  const seen = new Set<string>();
+  const events: SocialEvent[] = [];
+  for (const page of window.pages) {
+    for (const event of page.events) {
+      if (seen.has(event.id)) continue;
+      seen.add(event.id);
+      events.push(event);
+    }
+  }
+  return events;
 }
 
 /**
- * Append a page, then drop the pages that have scrolled out until only `keep`
- * remain. The id index is updated from the pages that enter and leave: the
- * leaving pages' ids are removed first, then the retained pages' ids are
- * re-added, so an event GitHub returned on two overlapping pages stays
- * indexed while either copy is held. The cursor to request next is the `next`
- * of the oldest page still kept.
+ * Append a page, then drop pages that have scrolled out until only `keep`
+ * remain. The cursor to request next is the `next` of the oldest retained page.
  */
 export function retainHistory(
   window: HistoryWindow,
@@ -69,14 +72,7 @@ export function retainHistory(
   const pages = [...window.pages, page];
   const drop = Math.max(0, pages.length - keep);
   const kept = drop > 0 ? pages.slice(drop) : pages;
-  const ids = new Set(window.ids);
-  for (const gone of pages.slice(0, drop)) {
-    for (const event of gone.events) ids.delete(event.id);
-  }
-  for (const retained of kept) {
-    for (const event of retained.events) ids.add(event.id);
-  }
-  return { pages: kept, ids };
+  return { pages: kept };
 }
 
 export function blockOf(event: SocialEvent): HomeBlock | null {
@@ -100,15 +96,12 @@ export function blockOf(event: SocialEvent): HomeBlock | null {
  */
 /**
  * The rows for the page, newest first. Inbox events come first; history is
- * added only when its id is not already in the inbox or an earlier history
- * page. `historyIds` is the incremental index from `retainHistory`, so a
- * settings change does not rescan identity — it only re-filters kinds.
+ * added only when its id is not already in the inbox or earlier history.
  */
 export function homeEvents(
   inbox: readonly SocialEvent[],
   history: readonly SocialEvent[],
   settings: HomeSettings,
-  historyIds?: ReadonlySet<string>,
 ): SocialEvent[] {
   const on = new Set(settings.blocks);
   const seen = new Set<string>();
@@ -120,10 +113,7 @@ export function homeEvents(
     rows.push(event);
   };
   for (const event of inbox) take(event);
-  for (const event of history) {
-    if (historyIds && !historyIds.has(event.id)) continue;
-    take(event);
-  }
+  for (const event of history) take(event);
   rows.sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
   return rows;
 }
