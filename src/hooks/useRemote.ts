@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { AppState } from 'react-native';
 
 import { GitHubError } from '../lib/github';
 import {
@@ -11,6 +12,9 @@ import {
   publishHydratedResource,
   publishNetworkResource,
   publishResource,
+  resourceFreshnessTimestamp,
+  resourceIsFresh,
+  shouldLoadResource,
   subscribeResource,
   startResourceWork,
 } from '../lib/resourceStore';
@@ -216,6 +220,8 @@ export function refreshResource(key: string): void {
   invalidateResourceHydration(key);
   entry.flight = null;
   entry.freshAt = null;
+  entry.failure = null;
+  entry.error = null;
   publish(entry);
 }
 
@@ -276,6 +282,10 @@ export function useRemote<T>(
   const entry = active ? entryFor<T>(active) : null;
 
   const [nonce, setNonce] = useState(0);
+  const [foregroundEpoch, setForegroundEpoch] = useState(0);
+  const lastActiveKey = useRef<string | null>(null);
+  const lastForegroundEpoch = useRef(0);
+  const lastNonce = useRef(0);
   const reload = useCallback(() => {
     if (active) {
       const current = entryFor<T>(active);
@@ -283,9 +293,19 @@ export function useRemote<T>(
       invalidateResourceHydration(active);
       current.flight = null;
       current.freshAt = null;
+      current.failure = null;
+      current.error = null;
     }
     setNonce((value) => value + 1);
   }, [active]);
+
+  useEffect(() => {
+    if (!active || staleAfterMs == null) return;
+    const subscription = AppState.addEventListener('change', (next) => {
+      if (next === 'active') setForegroundEpoch((epoch) => epoch + 1);
+    });
+    return () => subscription.remove();
+  }, [active, staleAfterMs]);
 
   useEffect(() => {
     if (!active || !entry || !state) return;
@@ -319,11 +339,30 @@ export function useRemote<T>(
   }, [active, cacheKey, entry, state, validate]);
 
   useEffect(() => {
+    const activationChanged = lastActiveKey.current !== active;
+    const foregroundChanged = lastForegroundEpoch.current !== foregroundEpoch;
+    const manualReload = lastNonce.current !== nonce;
+    lastActiveKey.current = active;
+    lastForegroundEpoch.current = foregroundEpoch;
+    lastNonce.current = nonce;
     if (!active || !entry || !state) return;
-    const fresh =
-      entry.freshAt != null &&
-      (staleAfterMs == null || Date.now() - entry.freshAt < staleAfterMs);
-    if (fresh && nonce === 0 && entry.flight == null) return;
+    const lastGoodAt =
+      staleAfterMs == null
+        ? entry.freshAt
+        : resourceFreshnessTimestamp(entry.origin, entry.at, entry.freshAt);
+    const fresh = resourceIsFresh(lastGoodAt, staleAfterMs);
+    if (
+      !shouldLoadResource({
+        fresh,
+        loading: entry.flight != null,
+        failed: entry.failure != null,
+        activationChanged,
+        foregroundChanged,
+        manualReload,
+      })
+    ) {
+      return;
+    }
     let cancelled = false;
     loadInto(active, cacheKey, (signal) => loader.current(signal), validate ?? null, persist).catch(
       () => {
@@ -333,7 +372,7 @@ export function useRemote<T>(
     return () => {
       cancelled = true;
     };
-  }, [active, cacheKey, entry, nonce, persist, staleAfterMs, state, validate]);
+  }, [active, cacheKey, entry, foregroundEpoch, nonce, persist, staleAfterMs, state, validate]);
 
   return useMemo(
     () => derive({ key, demo, snapshot: state, reload, staleAfterMs }),
@@ -374,10 +413,12 @@ function derive<T>({
     return { status: 'loading', reload };
   }
 
-  const stale =
-    staleAfterMs != null &&
-    snapshot.freshAt != null &&
-    Date.now() - snapshot.freshAt >= staleAfterMs;
+  const freshnessAt = resourceFreshnessTimestamp(
+    snapshot.origin,
+    snapshot.savedAt,
+    snapshot.freshAt,
+  );
+  const stale = staleAfterMs != null && !resourceIsFresh(freshnessAt, staleAfterMs);
   const fromDisk = snapshot.origin === 'disk';
   const failed = snapshot.failure as RemoteFailure;
 

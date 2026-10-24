@@ -5,6 +5,8 @@ import { fetchSocial, type SocialEvent } from '../lib/social';
 import { DEMO_TOKEN } from '../lib/token';
 import { useRemote } from './useRemote';
 
+const SOCIAL_STALE_AFTER_MS = 90_000;
+
 export type SocialState =
   | { status: 'idle' }
   | { status: 'loading' }
@@ -32,6 +34,7 @@ export function useSocial(
     {
       cacheKey: login && token !== DEMO_TOKEN ? `${login.toLowerCase()}-social` : null,
       demo,
+      staleAfterMs: SOCIAL_STALE_AFTER_MS,
     },
   );
 

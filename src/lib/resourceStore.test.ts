@@ -11,6 +11,9 @@ import {
   publishResourceForGeneration,
   publishHydratedResource,
   publishNetworkResource,
+  resourceIsFresh,
+  resourceFreshnessTimestamp,
+  shouldLoadResource,
   startResourceWork,
   subscribeResource,
 } from './resourceStore';
@@ -156,4 +159,34 @@ test('evicting and reopening a key cannot reuse an old hydration generation', ()
   const newGeneration = getResourceHydrationGeneration(key);
 
   assert.notEqual(newGeneration, oldGeneration);
+});
+
+test('freshness expires exactly at its configured age and is unbounded when omitted', () => {
+  assert.equal(resourceIsFresh(1_000, 100, 1_099), true);
+  assert.equal(resourceIsFresh(1_000, 100, 1_100), false);
+  assert.equal(resourceIsFresh(null, 100, 1_000), false);
+  assert.equal(resourceIsFresh(1_000, undefined, 9_999_999), true);
+});
+
+test('disk timestamps drive freshness until a network value is installed', () => {
+  assert.equal(resourceFreshnessTimestamp('disk', 1_000, null), 1_000);
+  assert.equal(resourceFreshnessTimestamp('network', null, 2_000), 2_000);
+  assert.equal(resourceFreshnessTimestamp(null, null, null), null);
+});
+
+test('a stale failure does not retry until activation, foreground return, or manual reload', () => {
+  const base = {
+    fresh: false,
+    loading: false,
+    failed: true,
+    activationChanged: false,
+    foregroundChanged: false,
+    manualReload: false,
+  };
+  assert.equal(shouldLoadResource(base), false);
+  assert.equal(shouldLoadResource({ ...base, activationChanged: true }), true);
+  assert.equal(shouldLoadResource({ ...base, foregroundChanged: true }), true);
+  assert.equal(shouldLoadResource({ ...base, manualReload: true }), true);
+  assert.equal(shouldLoadResource({ ...base, loading: true, manualReload: true }), false);
+  assert.equal(shouldLoadResource({ ...base, fresh: true, foregroundChanged: true }), false);
 });

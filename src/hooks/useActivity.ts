@@ -6,6 +6,8 @@ import { GitHubError } from '../lib/github';
 import { DEMO_TOKEN } from '../lib/token';
 import { useRemote } from './useRemote';
 
+const ACTIVITY_STALE_AFTER_MS = 5 * 60_000;
+
 export type ActivityState =
   | { status: 'idle' }
   | { status: 'loading' }
@@ -41,6 +43,7 @@ export function useActivity(
     {
       cacheKey: login && token !== DEMO_TOKEN ? `${login.toLowerCase()}-activity-v2` : null,
       demo,
+      staleAfterMs: ACTIVITY_STALE_AFTER_MS,
     },
   );
 

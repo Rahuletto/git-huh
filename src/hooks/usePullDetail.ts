@@ -18,6 +18,9 @@ import {
 import { DEMO_TOKEN } from '../lib/token';
 import { invalidateResource, invalidateResourceWhere, refreshResource, useRemote } from './useRemote';
 
+const PULL_CORE_STALE_AFTER_MS = 60_000;
+const PULL_SECTION_STALE_AFTER_MS = 2 * 60_000;
+
 /**
  * Pull requests, issues and discussions this process just made.
  *
@@ -128,6 +131,7 @@ export function usePullDetail(
       // pull4: the core answer no longer carries conversation, details or files.
       cacheKey: owner ? `${owner}-pull4-${repo}-${number}-core` : null,
       demo: demo ?? undefined,
+      staleAfterMs: PULL_CORE_STALE_AFTER_MS,
     },
   );
 
@@ -261,7 +265,7 @@ function useSection<T>(
       if (result.error) throw Object.assign(new Error(result.error.message), { readFailure: result.error });
       return result.data as T;
     },
-    { cacheKey, demo },
+    { cacheKey, demo, staleAfterMs: PULL_SECTION_STALE_AFTER_MS },
   );
   const reload = useCallback(() => {
     if (key) refreshResource(key);

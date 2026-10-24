@@ -107,7 +107,7 @@ export function useTogether(
     },
     // The sum lives in the registry for this session only. Persisting it
     // would keep a removed account's year reachable under the one that remains.
-    { cacheKey: null },
+    { cacheKey: null, staleAfterMs: FRESH_MS },
   );
 
   const commits = useRemote<Activity[]>(
@@ -119,7 +119,7 @@ export function useTogether(
           return EMPTY_ACTIVITY;
         }),
       ),
-    { cacheKey: null },
+    { cacheKey: null, staleAfterMs: FRESH_MS },
   );
 
   const read = years.status === 'ready' ? years.data : null;

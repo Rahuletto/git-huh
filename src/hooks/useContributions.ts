@@ -21,6 +21,8 @@ import { keyOf, readSaved, writeSaved, type Saved } from '../lib/store';
 import { DEMO_TOKEN } from '../lib/token';
 import { useRemote } from './useRemote';
 
+const CONTRIBUTIONS_STALE_AFTER_MS = 30 * 60_000;
+
 export type ContributionsState =
   | { status: 'idle' }
   | { status: 'loading' }
@@ -156,6 +158,7 @@ export function useContributions(
     {
       cacheKey: null,
       demo: demo ? { contributions: rollingFromDemo(demo), savedAt: null } : undefined,
+      staleAfterMs: CONTRIBUTIONS_STALE_AFTER_MS,
     },
   );
   const [cachedRolling, setCachedRolling] = useState<Rolling | null>(null);

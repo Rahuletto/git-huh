@@ -6,6 +6,8 @@ import { fetchOpenPrs, type PullRequest } from '../lib/prs';
 import { DEMO_TOKEN } from '../lib/token';
 import { useRemote } from './useRemote';
 
+const OPEN_PRS_STALE_AFTER_MS = 2 * 60_000;
+
 export type PrsState =
   | { status: 'idle' }
   | { status: 'loading' }
@@ -32,6 +34,7 @@ export function useOpenPrs(
     {
       cacheKey: login && token !== DEMO_TOKEN ? `${login.toLowerCase()}-prs` : null,
       demo,
+      staleAfterMs: OPEN_PRS_STALE_AFTER_MS,
     },
   );
 

@@ -45,6 +45,45 @@ function initialSnapshot<T>(): ResourceSnapshot<T> {
   };
 }
 
+export function resourceIsFresh(
+  freshAt: number | null,
+  staleAfterMs: number | undefined,
+  now = Date.now(),
+): boolean {
+  if (freshAt == null) return false;
+  return staleAfterMs == null || now - freshAt < staleAfterMs;
+}
+
+export function resourceFreshnessTimestamp(
+  origin: ResourceSnapshot<unknown>['origin'],
+  savedAt: number | null,
+  freshAt: number | null,
+): number | null {
+  return freshAt ?? (origin === 'disk' ? savedAt : null);
+}
+
+export function shouldLoadResource({
+  fresh,
+  loading,
+  failed,
+  activationChanged,
+  foregroundChanged,
+  manualReload,
+}: {
+  fresh: boolean;
+  loading: boolean;
+  failed: boolean;
+  activationChanged: boolean;
+  foregroundChanged: boolean;
+  manualReload: boolean;
+}): boolean {
+  if (loading) return false;
+  if (manualReload) return true;
+  if (fresh) return false;
+  if (activationChanged || foregroundChanged) return true;
+  return !failed;
+}
+
 /** Return the same immutable object until the resource is published again. */
 export function getResourceSnapshot<T>(key: string): ResourceSnapshot<T> {
   let current = snapshots.get(key) as ResourceSnapshot<T> | undefined;
