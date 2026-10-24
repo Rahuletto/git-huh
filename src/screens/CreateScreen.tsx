@@ -5,6 +5,7 @@ import { FormScrollView } from '../components/FormScrollView';
 import { Composer } from '../components/Composer';
 import { OverlayFrame } from '../components/Overlay';
 import { Label, Micro } from '../components/Type';
+import { noteCreated } from '../hooks/usePullDetail';
 import { useRemote } from '../hooks/useRemote';
 import { demoRepoInfo } from '../lib/demo';
 import { eventually } from '../lib/eventually';
@@ -178,7 +179,8 @@ export function NewPullScreen({ repo, head: startHead }: { repo: string; head?: 
             base: into,
             draft,
           });
-          nav.replace(pullRoute({ repo, number }));
+          noteCreated('pull', repo, number);
+ nav.replace(pullRoute({ repo, number }));
           return `opened #${number}`;
         }}
       />
@@ -302,7 +304,8 @@ export function NewDiscussionScreen({ repo }: { repo: string }) {
         doing="that discussion"
         onSubmit={async () => {
           const number = await createDiscussion(nav.token ?? '', repositoryId ?? '', category, title.trim(), body);
-          nav.replace({ kind: 'thread', repo, number, type: 'discussion' });
+          noteCreated('discussion', repo, number);
+ nav.replace({ kind: 'thread', repo, number, type: 'discussion' });
           return 'started';
         }}
       />

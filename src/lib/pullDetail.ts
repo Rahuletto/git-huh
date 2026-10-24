@@ -135,6 +135,7 @@ const threadCommentNode = commentNode.extend({
 });
 
 const coreSchema = pullSummarySchema.extend({
+  body: z.string(),
   id: z.string(),
   headRefOid: z.string(),
   viewerDidAuthor: z.boolean(),
@@ -230,8 +231,15 @@ const filesSchema = z.array(
   }),
 );
 
+/**
+ * The header of one pull request, with its description. `PULL_SUMMARY_FIELDS`
+ * is shared with the thirty-request activity sample and deliberately omits the
+ * body; a single opened request adds it back, because this read is for exactly
+ * the one being drawn.
+ */
 const CORE_FIELDS = /* GraphQL */ `
   ${PULL_SUMMARY_FIELDS}
+  body
   id headRefOid viewerDidAuthor author { login }
   baseRefName headRefName locked
   ${REACTION_FIELDS}
@@ -368,33 +376,94 @@ async function fetchFiles(
   });
 }
 
-/** Load the same object, with the same failure rules, from every route. */
-export async function fetchPullDetail(
+/** The part of a pull request the screen is actually showing. */
+export type PullSlice = 'core' | PullSection;
+
+function validPull(repo: string, number: number): boolean {
+  const [owner, name] = repo.split('/');
+  return Boolean(owner && name && Number.isInteger(number) && number > 0);
+}
+
+/**
+ * Existence and the header, shaped like the full object with the other
+ * sections empty. A screen can draw the title the moment this returns.
+ * Conversation, merge controls and patches are separate reads.
+ */
+export async function fetchPullCore(
   token: string,
   repo: string,
   number: number,
   signal?: AbortSignal,
-): Promise<PullDetailFull | null> {
-  const [owner, name] = repo.split('/');
-  if (!owner || !name || !Number.isInteger(number) || number <= 0) return null;
+): Promise<{ node: z.infer<typeof coreSchema>; pull: PullDetailFull } | null> {
+  if (!validPull(repo, number)) return null;
+  const node = await readPull(token, repo, number, 'Pull', CORE_FIELDS, coreSchema, signal);
+  if (!node) return null;
+  return { node, pull: assemble(node, repo, null, [], [], {}) };
+}
 
-  const [pr, conversation, details, patches] = await Promise.all([
-    readPull(token, repo, number, 'Pull', CORE_FIELDS, coreSchema, signal),
-    optionalRead(requireSection(readPull(token, repo, number, 'PullConversation', CONVERSATION_FIELDS, conversationSchema, signal))),
-    optionalRead(requireSection(readPull(token, repo, number, 'PullDetails', DETAILS_FIELDS, detailsSchema, signal))),
-    optionalRead(fetchFiles(token, repo, number, signal)),
-  ]);
-  if (!pr) return null;
+/** Talk, without waiting on details or files. */
+export async function fetchPullConversation(
+  token: string,
+  repo: string,
+  number: number,
+  signal?: AbortSignal,
+): Promise<PullComment[]> {
+  const talk = await requireSection(
+    readPull(token, repo, number, 'PullConversation', CONVERSATION_FIELDS, conversationSchema, signal),
+  );
+  return commentsFrom(talk);
+}
 
-  const talk = conversation.data;
-  const meta = details.data;
-  const files = patches.data ?? [];
-  const unavailable: PullDetailFull['unavailable'] = {};
-  if (conversation.error) unavailable.conversation = conversation.error;
-  if (details.error) unavailable.details = details.error;
-  if (patches.error) unavailable.files = patches.error;
+/** Merge and side-column fields, without waiting on talk or files. */
+export async function fetchPullDetails(
+  token: string,
+  repo: string,
+  number: number,
+  signal?: AbortSignal,
+): Promise<z.infer<typeof detailsSchema>> {
+  return requireSection(readPull(token, repo, number, 'PullDetails', DETAILS_FIELDS, detailsSchema, signal));
+}
 
-  const comments: PullComment[] = [
+/** Fold a details read onto a core object. Missing details stay unknown. */
+export function withDetails(core: PullDetailFull, meta: z.infer<typeof detailsSchema> | null): PullDetailFull {
+  if (!meta) return core;
+  return {
+    ...core,
+    assignees: meta.assignees.nodes.map((node) => node.login),
+    reviewers: (meta.reviewRequests?.nodes ?? []).flatMap((node) => {
+      const who = node.requestedReviewer?.login ?? node.requestedReviewer?.slug;
+      return who ? [who] : [];
+    }),
+    milestone: meta.milestone,
+    mergeable: meta.mergeable,
+    mergeState: meta.mergeStateStatus,
+    mergeMethods: [
+      ...(meta.repository.mergeCommitAllowed ? (['MERGE'] as const) : []),
+      ...(meta.repository.squashMergeAllowed ? (['SQUASH'] as const) : []),
+      ...(meta.repository.rebaseMergeAllowed ? (['REBASE'] as const) : []),
+    ],
+    autoMergeAllowed: meta.repository.autoMergeAllowed,
+    autoMergeOn: meta.autoMergeRequest != null,
+    canUpdate: meta.viewerCanUpdate,
+    canUpdateBranch: meta.viewerCanUpdateBranch,
+    permission: meta.repository.viewerPermission,
+    headRepo: meta.headRepository?.nameWithOwner ?? null,
+    headRefExists: meta.headRef != null,
+  };
+}
+
+/** Patches for the diff tab. A brief visit never calls this. */
+export async function fetchPullFiles(
+  token: string,
+  repo: string,
+  number: number,
+  signal?: AbortSignal,
+): Promise<DiffFile[]> {
+  return fetchFiles(token, repo, number, signal);
+}
+
+function commentsFrom(talk: z.infer<typeof conversationSchema> | null): PullComment[] {
+  return [
     ...(talk?.comments.nodes ?? []).map((node) => ({
       id: node.id,
       kind: 'comment' as const,
@@ -465,7 +534,19 @@ export async function fetchPullDetail(
       ];
     }),
   ].sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt));
+}
 
+type Details = z.infer<typeof detailsSchema> | null;
+
+function assemble(
+  pr: z.infer<typeof coreSchema>,
+  repo: string,
+  meta: Details,
+  comments: PullComment[],
+  files: DiffFile[],
+  unavailable: PullDetailFull['unavailable'],
+  reactions: Reaction[] = toReactions(pr.reactionGroups),
+): PullDetailFull {
   return {
     ...toPullSummary(pr, repo),
     id: pr.id,
@@ -495,10 +576,49 @@ export async function fetchPullDetail(
     locked: pr.locked,
     headRepo: meta?.headRepository?.nameWithOwner ?? null,
     headRefExists: meta?.headRef != null,
-    reactions: toReactions(pr.reactionGroups),
+    reactions,
     comments,
     files,
     moreFiles: Math.max(0, pr.changedFiles - files.length),
     unavailable,
   };
+}
+
+/**
+ * Load the same object, with the same failure rules, from every route.
+ *
+ * The four reads still start together here so a caller that wants the whole
+ * object keeps one answer. The screen does not use this: it asks for core
+ * first and for each other section when that tab is the one being drawn.
+ */
+export async function fetchPullDetail(
+  token: string,
+  repo: string,
+  number: number,
+  signal?: AbortSignal,
+): Promise<PullDetailFull | null> {
+  if (!validPull(repo, number)) return null;
+
+  const [pr, conversation, details, patches] = await Promise.all([
+    fetchPullCore(token, repo, number, signal),
+    optionalRead(fetchPullConversation(token, repo, number, signal)),
+    optionalRead(fetchPullDetails(token, repo, number, signal)),
+    optionalRead(fetchPullFiles(token, repo, number, signal)),
+  ]);
+  if (!pr) return null;
+
+  const unavailable: PullDetailFull['unavailable'] = {};
+  if (conversation.error) unavailable.conversation = conversation.error;
+  if (details.error) unavailable.details = details.error;
+  if (patches.error) unavailable.files = patches.error;
+
+  return assemble(
+    pr.node,
+    repo,
+    details.data,
+    conversation.data ?? [],
+    patches.data ?? [],
+    unavailable,
+    pr.pull.reactions,
+  );
 }
