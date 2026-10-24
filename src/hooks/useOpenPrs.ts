@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 
 import { demoPullRequests } from '../lib/demo';
+import { GitHubError } from '../lib/github';
 import { fetchOpenPrs, type PullRequest } from '../lib/prs';
 import { DEMO_TOKEN } from '../lib/token';
 import { useRemote } from './useRemote';
@@ -8,8 +9,8 @@ import { useRemote } from './useRemote';
 export type PrsState =
   | { status: 'idle' }
   | { status: 'loading' }
-  | { status: 'ready'; prs: PullRequest[]; savedAt: number | null; offline: boolean }
-  | { status: 'error' };
+  | { status: 'ready'; prs: PullRequest[]; savedAt: number | null; offline: boolean; stale: boolean }
+  | { status: 'unavailable'; failure: 'invalid-token' | 'failed'; savedAt: number | null };
 
 /**
  * Open PRs for the token owner, fetched while the section is open. The saved
@@ -41,9 +42,19 @@ export function useOpenPrs(
         prs: remote.data,
         savedAt: remote.savedAt,
         offline: remote.offline,
+        stale: remote.failure != null || remote.stale === true,
       };
     }
-    if (remote.status === 'error') return { status: 'error' };
+    if (remote.status === 'error') {
+      return {
+        status: 'unavailable',
+        failure:
+          remote.error instanceof GitHubError && remote.error.kind === 'invalid-token'
+            ? 'invalid-token'
+            : 'failed',
+        savedAt: null,
+      };
+    }
     return { status: remote.status };
   }, [remote]);
 }

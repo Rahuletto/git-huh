@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { rememberPull, rememberedPull } from './pullRequest';
 import { rest } from './rest';
 
 export interface PullRequest {
@@ -39,14 +40,30 @@ export async function fetchOpenPrs(
     schema: searchSchema,
     signal,
   });
-  return data.items.map((item) => ({
-    number: item.number,
-    title: item.title,
-    repo: repoOf(item.repository_url),
-    createdAt: item.created_at,
-    draft: item.draft ?? false,
-    htmlUrl: item.html_url,
-  }));
+  return data.items.map((item) => {
+    const repo = repoOf(item.repository_url);
+    const pull = {
+      number: item.number,
+      title: item.title,
+      repo,
+      createdAt: item.created_at,
+      draft: item.draft ?? false,
+      htmlUrl: item.html_url,
+    };
+    const prior = rememberedPull(repo, item.number, 'authored-open');
+    rememberPull({
+      repo,
+      number: item.number,
+      title: item.title,
+      htmlUrl: item.html_url,
+      createdAt: item.created_at,
+      draft: item.draft ?? false,
+      membership: 'authored-open',
+    });
+    return prior
+      ? { ...pull, title: prior.title, htmlUrl: prior.htmlUrl, createdAt: prior.createdAt, draft: prior.draft }
+      : pull;
+  });
 }
 
 export function prAge(createdAt: string, now: Date = new Date()): string {
