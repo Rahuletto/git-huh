@@ -1,7 +1,7 @@
 import { Directory, File, Paths } from 'expo-file-system';
 import { Platform } from 'react-native';
 
-import { escapeName } from './cacheKey';
+import { credentialGeneration, escapeName } from './cacheKey';
 import { createSavedStore, type Saved, type SavedBackend } from './savedStore';
 
 export type { Saved } from './savedStore';
@@ -113,16 +113,11 @@ export function pruneSavedCache(budgetBytes?: number): Promise<void> {
 }
 
 /**
- * A stable, short name for something that must not be written down as-is —
- * a token, which identifies the account whose answers these are.
+ * The persisted name of a credential. See `credentialGeneration`: this is no
+ * longer a 32-bit hash, and it never returns the credential itself.
  */
 export function keyOf(text: string): string {
-  let value = 0x811c9dc5;
-  for (let i = 0; i < text.length; i++) {
-    value ^= text.charCodeAt(i);
-    value = Math.imul(value, 0x01000193) >>> 0;
-  }
-  return value.toString(36);
+  return credentialGeneration(text);
 }
 
 /** Short age for a saved answer, in the app's own voice: `4m`, `3h`, `2d`. */

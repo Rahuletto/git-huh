@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
+import { credentialGeneration } from './cacheKey';
 import { createSavedStore, type SavedBackend } from './savedStore';
 
 function fixture(initial: Record<string, string> = {}) {
@@ -148,6 +149,45 @@ test('unchanged values skip disk writes while remembered bodies stay within a by
   await store.write('a', 'x');
 
   assert.equal(disk.operations.filter((operation) => operation === 'write:a').length, 2);
+  await store.flush();
+});
+
+// The real key shapes the app writes, spelled the way the call sites build
+// them: `model-${keyOf(token)}` for the token-named aggregates, and
+// `${login}-pull4-…` / `${login}-file-…` for the login-scoped reads.
+
+test('rotating or removing a credential leaves the old model file unread', async () => {
+  const model = (credential: string) => `model-${credentialGeneration(credential)}`;
+  const disk = fixture({ [model('ghp_old')]: envelope('ada year') });
+  const store = createSavedStore(disk.backend);
+
+  assert.equal((await store.read(model('ghp_old')))?.value, 'ada year');
+  assert.equal(await store.read(model('ghp_new')), null);
+  assert.equal(await store.read(model('')), null);
+  await store.flush();
+});
+
+test('a second account does not read the first account model, pull, or file', async () => {
+  const keys = (owner: string) => ({
+    model: `model-${credentialGeneration(`ghp_${owner}`)}`,
+    pull: `${owner}-pull4-owner-repo-4-core`,
+    file: `${owner}-file-owner-repo-main-README.md`,
+  });
+  const ada = keys('ada');
+  const bea = keys('bea');
+  const disk = fixture({
+    [ada.model]: envelope('ada year'),
+    [ada.pull]: envelope('ada pull'),
+    [ada.file]: envelope('ada file'),
+  });
+  const store = createSavedStore(disk.backend);
+
+  assert.equal((await store.read(ada.model))?.value, 'ada year');
+  assert.equal((await store.read(ada.pull))?.value, 'ada pull');
+  assert.equal((await store.read(ada.file))?.value, 'ada file');
+  assert.equal(await store.read(bea.model), null);
+  assert.equal(await store.read(bea.pull), null);
+  assert.equal(await store.read(bea.file), null);
   await store.flush();
 });
 

@@ -1,7 +1,13 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { accountCachePrefixes, composeKey, escapeName, KEY_SEPARATOR } from './cacheKey';
+import {
+  accountCachePrefixes,
+  composeKey,
+  credentialGeneration,
+  escapeName,
+  KEY_SEPARATOR,
+} from './cacheKey';
 
 describe('escapeName', () => {
   it('keeps plain names as they are', () => {
@@ -41,6 +47,47 @@ describe('composeKey', () => {
 
   it('treats null and undefined parts the same', () => {
     assert.equal(composeKey('me', 'x', null), composeKey('me', 'x', undefined));
+  });
+});
+
+describe('credentialGeneration', () => {
+  it('does not contain the credential and stays stable for one credential', () => {
+    const token = 'ghp_super-secret-token';
+    const first = credentialGeneration(token);
+    assert.equal(first.includes(token), false);
+    assert.equal(credentialGeneration(token), first);
+    assert.match(first, /^[0-9a-f]+$/);
+  });
+
+  it('gives every credential its own name, including tokens one character apart', () => {
+    const tokens = [
+      'ghp_account-one',
+      'ghp_account-two',
+      'ghp_account-onf',
+      'github_pat_work',
+      'github_pat_home',
+      '',
+      'a',
+      'b',
+    ];
+    const names = tokens.map(credentialGeneration);
+    assert.equal(new Set(names).size, names.length);
+  });
+
+  it('is longer than a 32-bit hash, so a short digest cannot pass', () => {
+    // FNV-1a in hex is 8 characters. A collision-resistant name is much longer.
+    assert.ok(credentialGeneration('ghp_account-one').length > 8);
+  });
+
+  it('matches the published SHA-256 of the empty credential and of "abc"', () => {
+    assert.equal(
+      credentialGeneration(''),
+      'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+    );
+    assert.equal(
+      credentialGeneration('abc'),
+      'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad',
+    );
   });
 });
 
