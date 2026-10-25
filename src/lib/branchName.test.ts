@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { firstFreePatchName, patchStem, timestampPatchName } from './branchName';
+import { firstFreePatchName, PATCH_NAME_LIMIT, patchStem, timestampPatchName } from './branchName';
+import { BRANCH_ATTEMPTS, referenceExists } from './proposalWrites';
+import { GitHubError } from './github';
 
 describe('firstFreePatchName', () => {
   const stem = patchStem('Ada');
@@ -24,5 +26,37 @@ describe('firstFreePatchName', () => {
     const existing = Array.from({ length: 30 }, (_, index) => `refs/heads/${stem}-${index + 1}`);
     assert.equal(firstFreePatchName(stem, existing), null);
     assert.equal(timestampPatchName(stem, 1_700_000_000_000).startsWith('ada-patch-'), true);
+  });
+
+  it('keeps collision retries inside the name ceiling', () => {
+    assert.ok(BRANCH_ATTEMPTS <= PATCH_NAME_LIMIT);
+    assert.ok(BRANCH_ATTEMPTS > 0);
+  });
+
+  it('treats only a rejected "reference already exists" as a collision', () => {
+    assert.equal(
+      referenceExists(new GitHubError('api', 'Reference already exists', 'rejected')),
+      true,
+    );
+    assert.equal(
+      referenceExists(new GitHubError('api', 'GitHub responded with 500.', 'unknown')),
+      false,
+    );
+    assert.equal(
+      referenceExists(new GitHubError('api', 'API rate limit exceeded', 'rate-limited')),
+      false,
+    );
+    assert.equal(
+      referenceExists(new GitHubError('forbidden', 'Resource not accessible by integration')),
+      false,
+    );
+    assert.equal(
+      referenceExists(new GitHubError('network', 'GitHub did not answer in time.', 'timeout')),
+      false,
+    );
+    assert.equal(
+      referenceExists(new GitHubError('api', 'Validation failed', 'rejected')),
+      false,
+    );
   });
 });
