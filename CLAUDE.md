@@ -198,9 +198,14 @@ compiled on a Mac.
   comments, reactions, edits and deletes, issues, labels, assignees,
   milestones, lock, pin, merging and the rest of a pull request's state,
   threads, discussions, stars, watching, forks, branches, files, releases,
-  alerts, follows, gists, the edit → branch → pull request flow including the
-  fork fallback) and `src/lib/checks.ts` (re-run, cancel, approvals,
-  workflow dispatch), and every GitHub write in the UI goes through
+  alerts, follows, gists) and `src/lib/checks.ts` (re-run, cancel, approvals,
+  workflow dispatch). The edit → branch → pull request flow is its own
+  resumable operation in `src/lib/proposalWrites.ts`, re-exported by `writes.ts`
+  as `proposeChange`/`resumeProposal`: fork, branch, commit and pull are each
+  recorded before they are sent, a lost reply is read back before it is
+  repeated, and only a confirmed "reference already exists" retries a branch
+  name. `src/lib/encodePath.ts` and `src/lib/forkRepo.ts` are the single owners
+  of path encoding and the fork-then-wait. Every GitHub write in the UI goes through
   `src/components/Composer.tsx` — `bare` for a write that is only a verb,
   `confirm` on anything that cannot be undone (pressed twice), `on` for a
   toggle, `initial` + `onCancel` for an edit. On the demo token the composer
@@ -243,6 +248,9 @@ compiled on a Mac.
   succeeded before checking access; normal reads still use binary protobuf.
   Calls time out after 20 s, because a public Funnel address can take
   several seconds to open a cold connection),
+  `src/lib/hostLifecycle.ts` (pure: connection identity, poll gating, the
+  failure backoff, and the one retained sample per resource — no sample ring
+  and no server delta without measured payload evidence),
   `src/lib/hostProto.ts` (proto messages → the types the screens
   draw, pure and tested), `proto/` (hostd's `.proto` files, copied from its
   repository; when they change, copy them again and run `npm run gen:host`,
@@ -258,7 +266,10 @@ compiled on a Mac.
   host with a light sweeping it, and the three steps to set it up). **Never
   put a real host's service names in this repository.**
 - `src/lib/triage.ts` + `src/hooks/useTriage.ts` — the inbox's own done /
-  snooze marks, per account, on the device.
+  snooze marks, per account, on the device. The local-day arithmetic it shares
+  with the midnight rollover (`src/hooks/useDayRollover.ts`) lives in the pure
+  `src/lib/day.ts`, tested across local midnight, daylight-saving and timezone
+  changes.
 - `src/lib/notify.ts` — the background inbox check (expo-background-task,
   ~15 min, Android decides) and its local notifications. See the entry-file
   trap below.
