@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { AppState } from 'react-native';
 
+import { localDay, msUntilNextLocalMidnight } from '../lib/day';
+
 /**
  * A counter that moves when the local calendar day does.
  *
@@ -22,11 +24,7 @@ export function useDayRollover(): number {
 
     const arm = () => {
       if (timer) clearTimeout(timer);
-      const now = new Date();
-      const next = new Date(now);
-      next.setHours(24, 0, 0, 0);
-      // A clock jump can land exactly on, or past, the boundary we aimed at.
-      const wait = Math.max(next.getTime() - now.getTime(), 1000);
+      const wait = msUntilNextLocalMidnight(new Date());
       timer = setTimeout(() => {
         day = localDay(new Date());
         bump();
@@ -53,11 +51,4 @@ export function useDayRollover(): number {
   }, []);
 
   return epoch;
-}
-
-/** YYYY-MM-DD in the local zone, so a timezone change is a new day. */
-function localDay(now: Date): string {
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const date = String(now.getDate()).padStart(2, '0');
-  return `${now.getFullYear()}-${month}-${date}`;
 }
