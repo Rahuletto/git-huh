@@ -7,6 +7,17 @@ import { HostService } from '../gen/hostd/v1/host_pb';
 import { SourceService } from '../gen/hostd/v1/source_pb';
 import { GitHubError } from './github';
 import { HostError, normalizeUrl, type HostSettings, type Overview, type Panel, type ServiceDetail } from './host';
+import {
+  hostBackoffAfterFailure,
+  hostBackoffAfterSuccess,
+  hostCallBlocked,
+  hostConnectionIdentity,
+  initialHostBackoff,
+  settleSample,
+  stableJson,
+  type HostBackoff,
+  type SettledSample,
+} from './hostLifecycle';
 import { toOverview, toPanel, toServiceDetail } from './hostProto';
 import { hostProbeFetch } from './hostProbeFetch';
 import { keyOf } from './store';
@@ -18,6 +29,10 @@ import { keyOf } from './store';
  * Connect protocol, which is plain HTTP/1.1 POSTs — what `fetch` can do, with
  * no TLS and no HTTP/2 needed on the tailnet. Each call carries the bearer
  * token and gives up after twenty seconds.
+ *
+ * A client is reused only for the same host and credential generation. There
+ * is no sample ring and no server delta: one settled body is kept per
+ * resource so an unchanged poll is not written again. See `hostLifecycle`.
  */
 
 const KEY = 'host_settings';
@@ -58,12 +73,7 @@ interface HostClients {
 interface LiveConnection {
   identity: string;
   clients: HostClients;
-  /** How many times in a row this connection failed, for the wait between tries. */
-  failures: number;
-  /** When the next call may leave, after a run of failures. */
-  retryAt: number;
-  /** The host refused this token; only a settings change may ask again. */
-  refused: boolean;
+  backoff: HostBackoff;
 }
 
 /**
@@ -75,7 +85,7 @@ interface LiveConnection {
 let live: LiveConnection | null = null;
 
 function connectionIdentity(settings: HostSettings): string {
-  return `${normalizeUrl(settings.url)}#${keyOf(settings.token)}`;
+  return hostConnectionIdentity(settings.url, keyOf(settings.token));
 }
 
 function openClients(settings: HostSettings, connectionProbe: boolean): HostClients {
@@ -94,16 +104,14 @@ function openClients(settings: HostSettings, connectionProbe: boolean): HostClie
 
 /** The clients for this address and token. Ordinary polls share them. */
 function clients(settings: HostSettings): HostClients {
-  const identity = connectionIdentity(settings);
-  if (live?.identity === identity) return live.clients;
-  live = { identity, clients: openClients(settings, false), failures: 0, retryAt: 0, refused: false };
-  return live.clients;
+  return connectionFor(settings).clients;
 }
 
 /**
  * Forget a connection whose settings were replaced or cleared. The next call
  * opens a new client and is allowed to try again; a refusal only lasts until
- * the credential changes.
+ * the credential changes. Passing the previous settings drops that connection
+ * only, so a late invalidation cannot erase the connection that replaced it.
  */
 export function invalidateHostConnection(settings?: HostSettings): void {
   if (!settings || !live || live.identity === connectionIdentity(settings)) live = null;
@@ -114,28 +122,17 @@ const REFUSAL = 'the host refused the token · copy it again from the host';
 function connectionFor(settings: HostSettings): LiveConnection {
   const identity = connectionIdentity(settings);
   if (live?.identity === identity) return live;
-  live = { identity, clients: openClients(settings, false), failures: 0, retryAt: 0, refused: false };
+  live = { identity, clients: openClients(settings, false), backoff: initialHostBackoff() };
   return live;
 }
 
 function noteSuccess(settings: HostSettings): void {
-  const current = connectionFor(settings);
-  current.failures = 0;
-  current.retryAt = 0;
-  current.refused = false;
+  connectionFor(settings).backoff = hostBackoffAfterSuccess();
 }
 
 function noteFailure(settings: HostSettings, refused: boolean): void {
   const current = connectionFor(settings);
-  if (refused) {
-    current.refused = true;
-    return;
-  }
-  current.failures += 1;
-  // 2s, 4s, 8s … capped at a minute, so a host that is down is not asked at
-  // the panel's own interval on top of every poll.
-  const wait = Math.min(60_000, 2_000 * 2 ** Math.min(current.failures - 1, 5));
-  current.retryAt = Date.now() + wait;
+  current.backoff = hostBackoffAfterFailure(current.backoff, refused, Date.now());
 }
 
 /** One call, with the app's errors: the host's own words, or "could not reach". */
@@ -147,10 +144,9 @@ async function call<T>(
 ): Promise<T> {
   if (!connectionProbe) {
     const held = live?.identity === connectionIdentity(settings) ? live : null;
-    if (held?.refused) throw new HostError(REFUSAL, 401);
-    if (held && held.retryAt > Date.now()) {
-      throw new GitHubError('network', 'waiting before asking the host again');
-    }
+    const blocked = hostCallBlocked(held?.backoff ?? null, Date.now(), false);
+    if (blocked === 'refused') throw new HostError(REFUSAL, 401);
+    if (blocked === 'waiting') throw new GitHubError('network', 'waiting before asking the host again');
   }
   try {
     const value = await run(connectionProbe ? openClients(settings, true) : clients(settings));
@@ -218,9 +214,10 @@ export async function probe(settings: HostSettings, signal?: AbortSignal): Promi
  * not move would rewrite a full snapshot. Returning the same object lets
  * that write see an identical body and skip the disk, while the screen still
  * refreshes on the samples that differ. There is no server delta: the whole
- * answer still travels, and only the persistence is coalesced.
+ * answer still travels, and only the persistence is coalesced. One sample
+ * per resource — not a ring.
  */
-const settled = new Map<string, { body: string; value: object }>();
+const settled = new Map<string, SettledSample<object>>();
 /** Samples handed back because they matched the previous one, so they are not written again. */
 const reused = new WeakSet<object>();
 
@@ -235,32 +232,11 @@ export function hostSampleUnchanged(value: object): boolean {
 
 function settle<T extends object>(settings: HostSettings, kind: string, value: T): T {
   const key = `${connectionIdentity(settings)}|${kind}`;
-  let body: string;
-  try {
-    body = stableJson(value);
-  } catch {
-    return value;
-  }
-  const previous = settled.get(key);
-  if (previous?.body === body) {
-    reused.add(previous.value);
-    return previous.value as T;
-  }
-  settled.set(key, { body, value });
-  return value;
-}
-
-/**
- * JSON with object keys in a fixed order. A host that answers the same
- * numbers with fields in a different order must still count as the same
- * sample, or the snapshot is rewritten on every poll.
- */
-function stableJson(value: unknown): string {
-  if (value === null || typeof value !== 'object') return JSON.stringify(value);
-  if (Array.isArray(value)) return `[${value.map((item) => stableJson(item)).join(',')}]`;
-  const record = value as Record<string, unknown>;
-  const keys = Object.keys(record).sort();
-  return `{${keys.map((key) => `${JSON.stringify(key)}:${stableJson(record[key])}`).join(',')}}`;
+  const previous = settled.get(key) as SettledSample<T> | undefined;
+  const next = settleSample(previous, value, stableJson as (sample: T) => string);
+  settled.set(key, next.sample);
+  if (next.unchanged) reused.add(next.sample.value);
+  return next.sample.value;
 }
 
 export function forgetSettled(settings: HostSettings): void {

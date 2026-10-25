@@ -2,8 +2,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AppState } from 'react-native';
 
 import { composeKey } from '../lib/cacheKey';
-import { demoOverview, demoServiceDetail, normalizeUrl, type HostSettings, type Overview, type ServiceDetail } from '../lib/host';
+import { demoOverview, demoServiceDetail, type HostSettings, type Overview, type ServiceDetail } from '../lib/host';
 import { fetchOverview, fetchService, forgetSettled, hostSampleUnchanged, hostStore, invalidateHostConnection } from '../lib/hostClient';
+import { hostIdentity as connectionIdentity, hostPollMayStart } from '../lib/hostLifecycle';
 import { useNav } from '../lib/nav';
 import { pollWhileForeground } from '../lib/polling';
 import { keyOf, removeSaved, writeSaved } from '../lib/store';
@@ -60,9 +61,12 @@ export function useHostSettings() {
  * Re-asks every `seconds` while `active`: the host's numbers are live, and a
  * section that is not on screen should not keep a phone's radio awake.
  */
-export function usePoll(reload: () => void, seconds: number, active: boolean) {
+export function usePoll(reload: () => void, seconds: number, active: boolean, inFlight = false) {
   useEffect(() => {
-    if (!active) return;
+    // Hidden, or a poll is already in flight: leaving the effect stops the
+    // timer, so hiding the screen halts the next poll and a repeated
+    // foreground cannot stack another.
+    if (!hostPollMayStart({ visible: active, inFlight })) return;
     return pollWhileForeground(reload, seconds, {
       currentState: AppState.currentState,
       subscribe: (listener) => {
@@ -70,7 +74,7 @@ export function usePoll(reload: () => void, seconds: number, active: boolean) {
         return () => subscription.remove();
       },
     });
-  }, [active, reload, seconds]);
+  }, [active, inFlight, reload, seconds]);
 }
 
 export function useOverview(settings: HostSettings | null | undefined, active: boolean) {
@@ -89,9 +93,8 @@ export function useOverview(settings: HostSettings | null | undefined, active: b
   usePoll(
     state.reload,
     state.status === 'ready' ? state.data.every : 10,
-    active && !!settings && !demo &&
-      state.status !== 'loading' && state.status !== 'idle' &&
-      !(state.status === 'ready' && state.refreshing),
+    active && !!settings && !demo && state.status !== 'loading' && state.status !== 'idle',
+    state.status === 'ready' && state.refreshing,
   );
   return state;
 }
@@ -109,9 +112,8 @@ export function useService(settings: HostSettings | null | undefined, id: string
   usePoll(
     state.reload,
     state.status === 'ready' ? state.data.every : 10,
-    active && !!settings && !demo &&
-      state.status !== 'loading' && state.status !== 'idle' &&
-      !(state.status === 'ready' && state.refreshing),
+    active && !!settings && !demo && state.status !== 'loading' && state.status !== 'idle',
+    state.status === 'ready' && state.refreshing,
   );
   return state;
 }
@@ -123,7 +125,7 @@ export function useService(settings: HostSettings | null | undefined, id: string
  * token itself is never a file name.
  */
 function hostIdentity(settings: HostSettings): string {
-  return `${normalizeUrl(settings.url)}#${keyOf(settings.token)}`;
+  return connectionIdentity(settings, keyOf);
 }
 
 /**
