@@ -11,18 +11,31 @@ import {
 } from './proposals';
 
 function committed(overrides: Partial<ProposalProgress> = {}): ProposalProgress {
+  // The coarse `step` is the last confirmed write; the per-step state has to
+  // agree with it, or the two views of the same proposal disagree.
+  const step = overrides.step === undefined ? 'committed' : overrides.step;
   return {
+    operation: 'proposal-op',
     repo: 'upstream/app',
     path: 'README.md',
     sha: 'blob-1',
     base: 'main',
     message: 'say hello',
     text: 'hello',
-    step: 'committed',
+    step,
+    steps: {
+      fork: 'confirmed',
+      branch: step === 'forked' ? 'not-started' : 'confirmed',
+      commit: step === 'committed' ? 'confirmed' : 'not-started',
+      pull: 'not-started',
+    },
     headRepo: 'me/app',
     headOwner: 'me',
-    branch: 'huh-readme',
-    commitSha: 'commit-1',
+    branch: step === 'forked' ? null : 'huh-readme',
+    baseSha: 'blob-1',
+    commitSha: step === 'committed' ? 'commit-1' : null,
+    blobSha: null,
+    pullNumber: null,
     ...overrides,
   };
 }

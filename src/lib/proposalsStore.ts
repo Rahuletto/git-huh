@@ -15,10 +15,10 @@ installProposalStore({
     const saved = await readSaved<ProposalProgress>(key);
     return saved ? saved.value : null;
   },
-  write(key, value): void {
-    writeSaved(key, value).catch(() => {});
+  write(key, value): Promise<void> {
+    return writeSaved(key, value);
   },
-  remove(key): void {
-    removeSaved(key).catch(() => {});
+  remove(key): Promise<void> {
+    return removeSaved(key);
   },
 });

@@ -1,18 +1,13 @@
 import { Buffer } from 'buffer';
 import { z } from 'zod';
 
-import { firstFreePatchName, patchStem, timestampPatchName } from './branchName';
-import { executeMutation, GitHubError } from './github';
-import {
-  clearProposal,
-  loadProposal,
-  proposalKey,
-  saveProposal,
-  type ProposalProgress,
-  type ProposalStep,
-} from './proposals';
+import { encodePath } from './encodePath';
+import { forkOf } from './forkRepo';
+import { executeMutation } from './github';
 import type { ReactionContent } from './reactions';
 import { rest } from './rest';
+
+export { encodePath };
 
 /**
  * Everything the app can change on GitHub, in one place.
@@ -160,24 +155,26 @@ export type ProposalResult =
 const refSchema = z.object({ object: z.object({ sha: z.string() }) });
 const contentWrite = z.object({ commit: z.object({ sha: z.string() }) });
 const pullMade = z.object({ number: z.number().int() });
-const forkSchema = z.object({
-  full_name: z.string(),
-  owner: z.object({ login: z.string() }),
-  default_branch: z.string(),
-});
+const repoSchema = z.object({ default_branch: z.string() });
 
 function encode(text: string): string {
   return Buffer.from(text, 'utf8').toString('base64');
 }
 
-async function putFile(
-  token: string,
-  repo: string,
-  proposal: Proposal,
-  branch: string,
-  signal?: AbortSignal,
-): Promise<string> {
-  const written = await rest(token, `/repos/${repo}/contents/${encodePath(proposal.path)}`, {
+/**
+ * The branch a file was read from, by name. A file opened from a code search
+ * result was read from the default branch without naming it.
+ */
+async function baseOf(token: string, proposal: Proposal): Promise<string> {
+  if (proposal.base) return proposal.base;
+  const repo = await rest(token, `/repos/${proposal.repo}`, { schema: repoSchema });
+  return repo.default_branch;
+}
+
+/** Commit straight onto the branch the file came from. One write, not a proposal. */
+export async function commitDirect(token: string, proposal: Proposal): Promise<ProposalResult> {
+  const branch = await baseOf(token, proposal);
+  const written = await rest(token, `/repos/${proposal.repo}/contents/${encodePath(proposal.path)}`, {
     method: 'PUT',
     body: {
       message: proposal.message,
@@ -186,29 +183,8 @@ async function putFile(
       branch,
     },
     schema: contentWrite,
-    signal,
   });
-  return written.commit.sha;
-}
-
-const repoSchema = z.object({ default_branch: z.string() });
-
-/**
- * The branch a file was read from, by name. A file opened from a code search
- * result was read from the default branch without naming it, and every write
- * below needs the name.
- */
-async function baseOf(token: string, proposal: Proposal): Promise<string> {
-  if (proposal.base) return proposal.base;
-  const repo = await rest(token, `/repos/${proposal.repo}`, { schema: repoSchema });
-  return repo.default_branch;
-}
-
-/** Commit straight onto the branch the file came from. */
-export async function commitDirect(token: string, proposal: Proposal): Promise<ProposalResult> {
-  const branch = await baseOf(token, proposal);
-  const sha = await putFile(token, proposal.repo, proposal, branch);
-  return { kind: 'committed', sha, branch };
+  return { kind: 'committed', sha: written.commit.sha, branch };
 }
 
 export interface ProposeOptions {
@@ -222,235 +198,13 @@ export interface ProposeOptions {
  * Commit onto a fresh branch and open a pull request from it — the default,
  * because a change made on a phone deserves a second look.
  *
- * If the token cannot create a branch in the repository, the change goes
- * through a fork, which is what the website does for anyone who is not a
- * collaborator: fork, branch, commit, and a pull request back upstream.
- *
- * Each of those writes is remembered as it succeeds. Opening the pull
- * request can fail after the commit, and calling this again for the same
- * file finishes the request instead of making a second branch.
+ * The fork, branch, commit and pull request are one resumable operation.
+ * `proposalWrites` owns that protocol; these stay the names screens call.
+ * Proposing again for the same file, or opening the pull request for one
+ * whose branch or commit already exists, runs only the steps that have not
+ * happened — and a step whose reply was lost is read back before it is sent.
  */
-export async function proposeChange(
-  token: string,
-  proposal: Proposal,
-  options: ProposeOptions = {},
-): Promise<ProposalResult> {
-  const key = proposalKey(options.account ?? proposal.login, proposal.repo, proposal.base, proposal.path, proposal.sha);
-  const held = await loadProposal(key);
-  // A commit already made must be finished, not repeated, even if the editor
-  // has since moved on: the words on the branch are the ones that were sent.
-  const same =
-    held != null &&
-    held.sha === proposal.sha &&
-    (held.text === proposal.text || (held.step === 'committed' && held.commitSha != null));
-  const progress = same && held ? held : await beginProposal(token, proposal, key, options.signal);
-  const sent = same && held && held.text !== proposal.text ? { ...proposal, text: held.text, message: held.message } : proposal;
-  return finishProposal(token, sent, key, progress, options.signal);
-}
-
-/**
- * Open the pull request for a proposal whose branch or commit already exists.
- * Same path as proposing again: only the steps that have not happened run.
- */
-export async function resumeProposal(
-  token: string,
-  proposal: Proposal,
-  options: ProposeOptions = {},
-): Promise<ProposalResult> {
-  return proposeChange(token, proposal, options);
-}
-
-async function beginProposal(
-  token: string,
-  proposal: Proposal,
-  key: string,
-  signal?: AbortSignal,
-): Promise<ProposalProgress> {
-  const baseBranch = await baseOf(token, proposal);
-  // The commit the file was read at. Resolved once, upstream: a fork may be
-  // behind, or lack the branch entirely, and forks share their parent's
-  // objects, so the new branch can start from this commit either way.
-  const base = await rest(token, `/repos/${proposal.repo}/git/ref/heads/${encodePath(baseBranch)}`, {
-    schema: refSchema,
-    signal,
-  });
-
-  let headRepo = proposal.repo;
-  let headOwner: string | null = null;
-  let step: ProposalStep = 'forked';
-  let branch: string;
-  try {
-    branch = await branchAt(token, headRepo, proposal.login, base.object.sha, signal);
-    step = 'branched';
-  } catch (error) {
-    if (!(error instanceof GitHubError) || (error.kind !== 'forbidden' && error.kind !== 'missing')) {
-      throw error;
-    }
-    const fork = await forkOf(token, proposal.repo, signal);
-    headRepo = fork.full_name;
-    headOwner = fork.owner.login;
-    remember(key, proposal, { step: 'forked', headRepo, headOwner, branch: null, commitSha: null, base: baseBranch });
-    branch = await branchAt(token, headRepo, proposal.login, base.object.sha, signal);
-    step = 'branched';
-  }
-  const progress = remember(key, proposal, {
-    step,
-    headRepo,
-    headOwner,
-    branch,
-    commitSha: null,
-    base: baseBranch,
-  });
-  return progress;
-}
-
-async function finishProposal(
-  token: string,
-  proposal: Proposal,
-  key: string,
-  progress: ProposalProgress,
-  signal?: AbortSignal,
-): Promise<ProposalResult> {
-  let current = progress;
-  if (current.branch == null) {
-    throw new GitHubError('api', 'The branch for this change was not created.');
-  }
-  if (current.step !== 'committed' || current.commitSha == null) {
-    const commitSha = await putFile(token, current.headRepo, proposal, current.branch, signal);
-    current = remember(key, proposal, { ...current, step: 'committed', commitSha });
-  }
-
-  const [title, ...description] = proposal.message.split('\n');
-  const pull = await rest(token, `/repos/${proposal.repo}/pulls`, {
-    method: 'POST',
-    body: {
-      title,
-      head: current.headOwner ? `${current.headOwner}:${current.branch}` : current.branch,
-      base: current.base,
-      body: description.join('\n').trim(),
-    },
-    schema: pullMade,
-    signal,
-  });
-  clearProposal(key);
-  return { kind: 'pull', repo: proposal.repo, number: pull.number };
-}
-
-function remember(
-  key: string,
-  proposal: Proposal,
-  fields: Pick<ProposalProgress, 'step' | 'headRepo' | 'headOwner' | 'branch' | 'commitSha' | 'base'>,
-): ProposalProgress {
-  const progress: ProposalProgress = {
-    repo: proposal.repo,
-    path: proposal.path,
-    sha: proposal.sha,
-    message: proposal.message,
-    text: proposal.text,
-    ...fields,
-  };
-  saveProposal(key, progress);
-  return progress;
-}
-
-const matchingRefs = z.array(z.object({ ref: z.string() }));
-
-/**
- * A new branch in `repo` pointing at `sha`, named the way the website names it.
- *
- * One matching-refs read lists the patch branches that already exist; the
- * first free suffix is chosen locally. Creating it can still collide with
- * someone else in the same moment, so the next free name is tried a few
- * times, and a timestamp name after that.
- */
-async function branchAt(
-  token: string,
-  repo: string,
-  login: string,
-  sha: string,
-  signal?: AbortSignal,
-): Promise<string> {
-  const stem = patchStem(login);
-  const refs = await rest(token, `/repos/${repo}/git/matching-refs/heads/${encodePath(stem)}-`, {
-    schema: matchingRefs,
-    signal,
-  });
-  const names = refs.map((entry) => entry.ref);
-  for (let attempt = 0; attempt < 5; attempt++) {
-    const name = firstFreePatchName(stem, names) ?? timestampPatchName(stem);
-    try {
-      await rest(token, `/repos/${repo}/git/refs`, {
-        method: 'POST',
-        body: { ref: `refs/heads/${name}`, sha },
-        signal,
-      });
-      return name;
-    } catch (error) {
-      if (!(error instanceof GitHubError) || error.kind !== 'api') throw error;
-      names.push(`refs/heads/${name}`);
-    }
-  }
-  const fallback = timestampPatchName(stem);
-  await rest(token, `/repos/${repo}/git/refs`, {
-    method: 'POST',
-    body: { ref: `refs/heads/${fallback}`, sha },
-    signal,
-  });
-  return fallback;
-}
-
-/** Fork, then wait for GitHub to finish making it — it answers before it has. */
-async function forkOf(token: string, repo: string, signal?: AbortSignal) {
-  const fork = await rest(token, `/repos/${repo}/forks`, {
-    method: 'POST',
-    body: { default_branch_only: true },
-    schema: forkSchema,
-    signal,
-  });
-  for (let attempt = 0; attempt < 10; attempt++) {
-    throwIfAborted(signal);
-    try {
-      await rest(token, `/repos/${fork.full_name}/git/ref/heads/${encodePath(fork.default_branch)}`, {
-        signal,
-      });
-      return fork;
-    } catch (error) {
-      if (error instanceof Error && error.name === 'AbortError') throw error;
-      if (!(error instanceof GitHubError) || error.kind !== 'missing') throw error;
-      await sleep(1500, signal);
-    }
-  }
-  throw new GitHubError('api', 'The fork is still being made. Try again in a minute.');
-}
-
-function throwIfAborted(signal?: AbortSignal): void {
-  if (!signal?.aborted) return;
-  const error = new Error('aborted');
-  error.name = 'AbortError';
-  throw error;
-}
-
-/** A wait that ends early when the proposal is cancelled, without undoing it. */
-function sleep(ms: number, signal?: AbortSignal): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const abort = () => {
-      clearTimeout(timer);
-      const error = new Error('aborted');
-      error.name = 'AbortError';
-      reject(error);
-    };
-    const timer = setTimeout(() => {
-      signal?.removeEventListener('abort', abort);
-      resolve();
-    }, ms);
-    if (signal?.aborted) abort();
-    else signal?.addEventListener('abort', abort, { once: true });
-  });
-}
-
-export function encodePath(path: string): string {
-  return path.split('/').map(encodeURIComponent).join('/');
-}
+export { proposeChange, resumeProposal } from './proposalWrites';
 
 // ---------------------------------------------------------------------------
 // Everything else a person does to an issue, a pull request or a discussion

@@ -21,9 +21,12 @@ export function patchStem(login: string): string {
  * `existing` is whatever matching-refs returned: full refs
  * (`refs/heads/login-patch-1`) or bare names. A number past `limit` is left
  * alone so a crowded stem does not walk forever; the caller then uses a
- * timestamp instead.
+ * timestamp instead. `limit` is also the ceiling on collision retries: a
+ * caller must not ask for a name further out than this.
  */
-export function firstFreePatchName(stem: string, existing: readonly string[], limit = 30): string | null {
+export const PATCH_NAME_LIMIT = 30;
+
+export function firstFreePatchName(stem: string, existing: readonly string[], limit = PATCH_NAME_LIMIT): string | null {
   const taken = new Set<number>();
   const prefix = `${stem}-`;
   for (const ref of existing) {
