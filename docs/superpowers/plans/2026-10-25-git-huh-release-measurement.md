@@ -78,3 +78,15 @@
 ## Verification
 
 Run the applicable export/build commands in release mode and preserve raw measurements. Expo development mode, Metro's dev server, and unit-test timings do not demonstrate production startup, bundle splitting, RAM, or frame-rate improvements.
+
+## Status (2026-10-25)
+
+Only Task 1's reproducible protocol landed (`d9c51e8 docs: add release
+measurement protocol and baseline record`): `docs/performance/README.md` and the
+`docs/performance/baseline.md` template define the dataset, device matrix and
+recorded fields. No baseline numbers exist.
+
+Tasks 1–4 measurements and Task 5's release gates are blocked: there is no
+Android or iOS device, no release build and no CI pipeline in this environment.
+No web or native bundle splitting was enabled, and no startup, memory or
+frame-time improvement is claimed anywhere in this branch as a result.

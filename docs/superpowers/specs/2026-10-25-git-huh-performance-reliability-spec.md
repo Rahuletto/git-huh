@@ -26,25 +26,25 @@ The 25 Oct deep-review HTML is readable as a text report and its findings were s
 | Audit items | Disposition on this branch |
 |---|---|
 | 01 editor snapshot, 02 theme remount, 04 host identity, 05 composed cache keys, 06 avoid persisted aggregate, 08 empty files, 10 rolling calendar first, 11 local sections independent, 12 PR sections, 14 pull body separation, 15 viewer-id filtering, 16 bounded secondary-account loading, 18 deadline/budget primitives, 20 REST validators, 21 shared resource registry, 22 shared current value, 25 coalesced ordered persistence, 26 LRU disk index, 29 virtual Today, 30 bounded history, 31 cancellable history, 33 seen only while inbox visible, 36 bounded log tail, 38 debounced file search, 40 bounded patch scan, 41 memoized derivations, 42 reduced/offscreen animation, 43 batched branch-name lookup, 45 guarded checks actions, 47 widget redraw coalescing, 48 byte-budgeted widget cache | Implemented or substantially implemented. Preserve and add regression/device evidence; do not redo blindly. Residual details are in plans. |
-| 03 uncertain mutation outcomes | Partial: REST transport distinguishes outcomes; GraphQL mutation call sites do not pass mutation intent. |
-| 07 failed slices vs valid zeros | Partial: slice statuses exist, but audit each caller/hydration path and assert no failed slice becomes a persisted zero. |
-| 09 clock-derived state | Partial: local day rollover exists; verify snooze, timezone/DST, foreground, widget, and saved model behavior together. |
-| 13 eventual-consistency retry scope | Open: ordinary PR/thread reads still use retry behavior; restrict retries to create-then-open flows. |
-| 17 overlapping queries | Open by design: preserve differing query semantics; reuse normalized entities only where safe. |
-| 19 rate-limit scheduling | Partial: classification/cooldown exist; production reads default to interactive priority. |
-| 23 stale/focus policy | Partial: shared keys exist, but no production caller supplies `staleAfterMs`; define resource freshness and foreground refresh. |
-| 24 cached inner-schema validation | Partial: the store validates envelope and supports optional validators; audit and test every durable cache shape/version. |
-| 27 mutation invalidation | Partial: targeted invalidation exists, but its flight handling is broken and some parent lists need explicit effects. |
-| 28 stale authorization/failure messaging | Partial: offline/stale states exist; permission and revoked-token policies need cross-screen verification. |
-| 32 nested/list completeness | Open: retain explicit caps/cursors and truthful “more/truncated” behavior for inbox, conversations, repository pickers. |
-| 34 selector-level session subscriptions | Partial: action/data split exists, but all data is one broad context. Profile then narrow high-churn subscriptions. |
-| 35 bounded overlay retention | Partial: only a few pushed routes stay mounted; prove draft, scroll, focus, and local state recovery for evicted screens. |
-| 37 size-aware file transfer | Partial: patch reads are bounded, but inspect large file/base64/text/line allocations and metadata reuse. |
-| 39 file-list geometry | Not measured; instrument viewport, mounted rows, scroll-to-index, and memory on devices before changing layout. |
-| 44 resumable proposal writes | Partial: successful steps persist, but uncertain dispatched steps are not reconciled safely. |
-| 46 host client reuse | Partial/unverified: retain visibility and in-flight poll gates; measure client creation, persistence, and failure backoff. Do not add a server delta protocol without hostd support and evidence. |
-| 49 lifecycle/integration tests | Open: current reported unit count does not prove hooks, disk, UI, or native lifecycle behavior. |
-| 50 release measurements and bundle loading | Open: no device baselines. Dynamic-import behavior must be measured by platform/build type. |
+| 03 uncertain mutation outcomes | Done (code): `executeMutation` in `github.ts` is the one GraphQL mutation entry (`mutation: true`); every mutation call site in `writes.ts` uses it. Tests: `github.test.ts`, `transportBudget.test.ts`. Device behavior not measured. |
+| 07 failed slices vs valid zeros | Done (code): `optionalRead` isolates a supplemental read and returns a `ReadFailure` record, never a valid empty; `invalid-token` is rethrown. Tests: `optionalRead.test.ts` (stale→forbidden, revoked token, offline, rate-limit, and the one genuine empty). |
+| 09 clock-derived state | Done (code): `day.ts` holds `localDay`/`msUntilNextLocalMidnight`/`nextMorning`/`stateOnDay`; the rollover and triage call it. Tests: `triage.test.ts` covers midnight, spring-forward, fall-back, timezone change and foreground resume. Widget date rendering not device-verified. |
+| 13 eventual-consistency retry scope | Done (code): `noteCreated`/`wasJustCreated` plus `eventually(..., { recent: true })` gate retries to a just-created object; `usePullDetail` retries only the core read, and the release create retries only the propagation read, aborted on leaving the form. Ordinary reads issue one request. |
+| 17 overlapping queries | Open by design: inbox/history/mention/review/open-PR queries keep distinct membership; entities are reused only where completeness is unchanged. |
+| 19 rate-limit scheduling | Done (code): every read takes a `RequestPriority`, `interactive` by default and `background` for the secondary/together/notify lanes. Tests: `rateLimit.test.ts` (interactive proceeds during a cooldown, background waits then leaves once it expires). |
+| 23 stale/focus policy | Done (code): production hooks supply named `staleAfterMs` (activity 5m, PR core 60s, PR section 2m, social 90s, queue/tasks/open-PRs 2m, people 15m, contributions 30m, together `FRESH_MS`), and foreground return revalidates only expired or invalidated resources. |
+| 24 cached inner-schema validation | Improved: `proposalsStore` write/remove now return the store promise so a failed save surfaces instead of promising a restart; `savedStore.test.ts` covers the envelope and version. Per-shape validators/migration across every durable payload still to audit. |
+| 27 mutation invalidation | Done (code) for pull requests: one typed `PullMutation`→`PullSection` effect map in `usePullDetail`; `invalidateResource`/`refreshResource` cancel the prior flight and bump the generation so a stale completion cannot republish or strand `flight`. Other parent lists still rely on explicit effects. |
+| 28 stale authorization/failure messaging | Done (code): `explainReadFailure` names the subject and GitHub's reason; `optionalRead` keeps stale content with a failure record for forbidden/offline/rate-limited and rethrows a revoked token. Tests: `optionalRead.test.ts`. |
+| 32 nested/list completeness | Open: explicit caps/cursors and truthful truncation for inbox, conversations and repository pickers remain to be asserted per connection. |
+| 34 selector-level session subscriptions | Partial: the action/data split exists; the broad data context remains. Narrowing waits on a release Profiler trace. |
+| 35 bounded overlay retention | Partial: pushed routes are retained within a bound; draft/scroll/focus recovery under eviction is not proven. |
+| 37 size-aware file transfer | Partial: patch and response reads are bounded, but large-file/base64/line allocations are not profiled. |
+| 39 file-list geometry | Not measured: needs device instrumentation of viewport, mounted rows, scroll-to-index and memory; no layout change was made without it. |
+| 44 resumable proposal writes | Done (code): `proposalWrites.ts` records per-step state (`not-started`/`in-flight`/`unknown`/`confirmed`), reconciles an unknown branch/commit/pull by reading remote state, and never replays a dispatched write. Tests: `proposalWrites.test.ts` (8) and `branchName.test.ts`. Device not measured. |
+| 46 host client reuse | Done (code), device-unverified: `hostLifecycle.ts` holds identity, poll-gate, backoff and one-sample rules; `hostClient` reuses one client per host+credential generation and drops it with its samples on change. Tests: `host.test.ts`. Client creation/persistence/backoff not measured; no server delta added. |
+| 49 lifecycle/integration tests | Improved: `host.test.ts`, `triage.test.ts`, `optionalRead.test.ts`, `proposalWrites.test.ts` and `savedStore.test.ts` cover host lifecycle, date rollover, failure records and lost-write reconciliation on Node. Hooks/disk/UI/native lifecycle still need device-level integration. |
+| 50 release measurements and bundle loading | Open: `docs/performance/` holds the measurement protocol and an empty baseline template; no device baselines yet. No native bundle splitting was added. |
 
 ## Required outcomes
 

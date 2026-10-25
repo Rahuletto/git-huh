@@ -36,11 +36,11 @@
 - `subscribeResource(key, listener): () => void` registers one listener.
 - Internal `publishResource(key, nextFields)` installs a new snapshot object before notifying listeners.
 
-- [ ] **Step 1: Write a failing identity/publication test.** Create a resource, retain its initial snapshot, subscribe, publish a value, and assert the listener fires once, the next snapshot is a different object, and a second read without mutation returns that same new object.
-- [ ] **Step 2: Run `bun test -- src/lib/resourceStore.test.ts`.** Expected: FAIL because the store module and immutable snapshot do not exist.
-- [ ] **Step 3: Implement the smallest pure store.** Keep mutable lifecycle data private; expose `{ value, error, loading, refreshing, savedAt, freshAt, version }` as a readonly snapshot. Increment `version` and replace the snapshot before notifying. Do not create a new object inside `getResourceSnapshot`.
-- [ ] **Step 4: Run the targeted test and `bun run typecheck`.** Expected: identity contract passes and public types compile.
-- [ ] **Step 5: Commit.** `git add src/lib/resourceStore.ts src/lib/resourceStore.test.ts src/hooks/useRemote.ts && git commit -m "fix: publish observable resource snapshots"`
+- [x] **Step 1: Write a failing identity/publication test.** Create a resource, retain its initial snapshot, subscribe, publish a value, and assert the listener fires once, the next snapshot is a different object, and a second read without mutation returns that same new object.
+- [x] **Step 2: Run `bun test -- src/lib/resourceStore.test.ts`.** Expected: FAIL because the store module and immutable snapshot do not exist.
+- [x] **Step 3: Implement the smallest pure store.** Keep mutable lifecycle data private; expose `{ value, error, loading, refreshing, savedAt, freshAt, version }` as a readonly snapshot. Increment `version` and replace the snapshot before notifying. Do not create a new object inside `getResourceSnapshot`.
+- [x] **Step 4: Run the targeted test and `bun run typecheck`.** Expected: identity contract passes and public types compile.
+- [x] **Step 5: Commit.** `git add src/lib/resourceStore.ts src/lib/resourceStore.test.ts src/hooks/useRemote.ts && git commit -m "fix: publish observable resource snapshots"`
 
 ### Task 2: Make in-flight work cancellable and invalidation atomic
 
@@ -50,11 +50,11 @@
 - Modify: `src/hooks/useRemote.ts`
 - Modify: `src/hooks/usePullDetail.ts`
 
-- [ ] **Step 1: Add failing race tests.** Cover (a) invalidate while a request is pending, (b) a newer request resolving before an older request, (c) refresh aborting its old request, and (d) last subscriber leaving then a request resolving.
-- [ ] **Step 2: Run `bun test -- src/lib/resourceStore.test.ts`.** Expected: the stale flight is currently reused or its signal is not aborted.
-- [ ] **Step 3: Store `flight`, `AbortController`, and `generation` together.** `invalidateResource` and `refreshResource` must abort the previous controller, clear flight ownership, increment generation, publish once, then allow the active hook to start one replacement request. A completion may write/publish only when both resource key and generation still match.
-- [ ] **Step 4: Add a test where an invalidated old promise settles after the new promise.** Assert the old value cannot overwrite the new value and cannot leave `flight` set.
-- [ ] **Step 5: Run targeted tests and typecheck; commit.** `git add src/lib/resourceStore.ts src/lib/resourceStore.test.ts src/hooks/useRemote.ts src/hooks/usePullDetail.ts && git commit -m "fix: make resource invalidation atomic"`
+- [x] **Step 1: Add failing race tests.** Cover (a) invalidate while a request is pending, (b) a newer request resolving before an older request, (c) refresh aborting its old request, and (d) last subscriber leaving then a request resolving.
+- [x] **Step 2: Run `bun test -- src/lib/resourceStore.test.ts`.** Expected: the stale flight is currently reused or its signal is not aborted.
+- [x] **Step 3: Store `flight`, `AbortController`, and `generation` together.** `invalidateResource` and `refreshResource` must abort the previous controller, clear flight ownership, increment generation, publish once, then allow the active hook to start one replacement request. A completion may write/publish only when both resource key and generation still match.
+- [x] **Step 4: Add a test where an invalidated old promise settles after the new promise.** Assert the old value cannot overwrite the new value and cannot leave `flight` set.
+- [x] **Step 5: Run targeted tests and typecheck; commit.** `git add src/lib/resourceStore.ts src/lib/resourceStore.test.ts src/hooks/useRemote.ts src/hooks/usePullDetail.ts && git commit -m "fix: make resource invalidation atomic"`
 
 ### Task 3: Race disk hydration safely with the first network read
 
@@ -63,12 +63,12 @@
 - Modify: `src/hooks/useRemote.ts`
 - Modify: `src/lib/store.ts` only if a read API change is required.
 
-- [ ] **Step 1: Add failing deferred tests.** Case A: disk answer resolves before network; UI snapshot shows stale disk then fresh network. Case B: network resolves before disk; late disk cannot replace it. Case C: corrupt/invalid cached shape is discarded while network success remains visible.
-- [ ] **Step 2: Run the targeted test and record the failing assertion.** Expected: the test harness exposes an old disk value replacing or racing the current resource.
-- [ ] **Step 3: Add a cache-read generation token to hydration.** Install disk data only if the key, generation, and empty-value state are unchanged. Validate once at hydration; do not validate on every render.
+- [x] **Step 1: Add failing deferred tests.** Case A: disk answer resolves before network; UI snapshot shows stale disk then fresh network. Case B: network resolves before disk; late disk cannot replace it. Case C: corrupt/invalid cached shape is discarded while network success remains visible.
+- [x] **Step 2: Run the targeted test and record the failing assertion.** Expected: the test harness exposes an old disk value replacing or racing the current resource.
+- [x] **Step 3: Add a cache-read generation token to hydration.** Install disk data only if the key, generation, and empty-value state are unchanged. Validate once at hydration; do not validate on every render.
 - [ ] **Step 4: Audit every durable cache record's inner schema/version.** Add validators for persisted shapes that currently rely only on envelope validation; reject or migrate invalid entries without hiding valid network data.
-- [ ] **Step 5: Re-run targeted tests, `bun run typecheck`, and `bun run lint`.** Expected: network and disk order no longer changes the final snapshot, and all durable payloads have an explicit validation or migration policy.
-- [ ] **Step 6: Commit.** `git add src/lib/resourceStore.test.ts src/hooks/useRemote.ts src/lib/store.ts && git commit -m "fix: prevent stale cache hydration races"`
+- [x] **Step 5: Re-run targeted tests, `bun run typecheck`, and `bun run lint`.** Expected: network and disk order no longer changes the final snapshot, and all durable payloads have an explicit validation or migration policy.
+- [x] **Step 6: Commit.** `git add src/lib/resourceStore.test.ts src/hooks/useRemote.ts src/lib/store.ts && git commit -m "fix: prevent stale cache hydration races"`
 
 ### Task 4: Keep the request deadline active through bounded body reads
 
@@ -79,11 +79,11 @@
 - Create or modify: `src/lib/requestBudget.test.ts`
 - Create or modify: transport tests under `src/lib/`
 
-- [ ] **Step 1: Add a stalled-body test.** Use a `ReadableStream` response that resolves headers immediately and never closes; assert a read rejects on its timeout and the reader is cancelled.
-- [ ] **Step 2: Run the targeted test.** Expected: current code hangs because `deadline.dispose()` runs before `readBounded`.
-- [ ] **Step 3: Move deadline disposal around the full lifecycle.** Keep caller abort distinct from deadline expiry while reading and parsing; ensure `readBounded` cancels on byte overflow, abort, and timeout. Count UTF-8 bytes in the no-reader fallback instead of UTF-16 code units.
-- [ ] **Step 4: Test timeout during headers, timeout during body, user cancellation, byte cap, line cap, and 204.** Run the focused tests plus `bun run typecheck`.
-- [ ] **Step 5: Commit.** `git add src/lib/requestBudget.ts src/lib/rest.ts src/lib/github.ts src/lib/requestBudget.test.ts src/lib && git commit -m "fix: enforce deadlines through response bodies"`
+- [x] **Step 1: Add a stalled-body test.** Use a `ReadableStream` response that resolves headers immediately and never closes; assert a read rejects on its timeout and the reader is cancelled.
+- [x] **Step 2: Run the targeted test.** Expected: current code hangs because `deadline.dispose()` runs before `readBounded`.
+- [x] **Step 3: Move deadline disposal around the full lifecycle.** Keep caller abort distinct from deadline expiry while reading and parsing; ensure `readBounded` cancels on byte overflow, abort, and timeout. Count UTF-8 bytes in the no-reader fallback instead of UTF-16 code units.
+- [x] **Step 4: Test timeout during headers, timeout during body, user cancellation, byte cap, line cap, and 204.** Run the focused tests plus `bun run typecheck`.
+- [x] **Step 5: Commit.** `git add src/lib/requestBudget.ts src/lib/rest.ts src/lib/github.ts src/lib/requestBudget.test.ts src/lib && git commit -m "fix: enforce deadlines through response bodies"`
 
 ### Task 5: Make background request priority real
 
@@ -94,11 +94,11 @@
 - Modify: `src/hooks/useTogether.ts`, `src/hooks/useActivity.ts`, and any background poll caller
 - Modify: `src/lib/rateLimit.test.ts`
 
-- [ ] **Step 1: Add failing transport tests.** Seed a cooldown; assert an interactive read proceeds, a background read is deferred/rejected before `fetch`, and expiry permits the background request.
-- [ ] **Step 2: Run `bun test -- src/lib/rateLimit.test.ts`.** Expected: no production call currently reaches `maySend` as background.
-- [ ] **Step 3: Thread an explicit priority through read options.** Mark passive refresh, secondary-account refresh, notifications, and host/background polling as background; leave user-triggered detail/retry actions interactive. Do not globally relabel reads without reviewing caller intent.
-- [ ] **Step 4: Run focused rate-limit tests and `bun run typecheck`.** Expected: no background `fetch` is dispatched during cooldown; interactive user action remains available with a truthful error state.
-- [ ] **Step 5: Commit.** `git add src/lib/github.ts src/lib/rest.ts src/lib/rateLimit.ts src/lib/rateLimit.test.ts src/hooks && git commit -m "feat: prioritize interactive GitHub reads"`
+- [x] **Step 1: Add failing transport tests.** Seed a cooldown; assert an interactive read proceeds, a background read is deferred/rejected before `fetch`, and expiry permits the background request.
+- [x] **Step 2: Run `bun test -- src/lib/rateLimit.test.ts`.** Expected: no production call currently reaches `maySend` as background.
+- [x] **Step 3: Thread an explicit priority through read options.** Mark passive refresh, secondary-account refresh, notifications, and host/background polling as background; leave user-triggered detail/retry actions interactive. Do not globally relabel reads without reviewing caller intent.
+- [x] **Step 4: Run focused rate-limit tests and `bun run typecheck`.** Expected: no background `fetch` is dispatched during cooldown; interactive user action remains available with a truthful error state.
+- [x] **Step 5: Commit.** `git add src/lib/github.ts src/lib/rest.ts src/lib/rateLimit.ts src/lib/rateLimit.test.ts src/hooks && git commit -m "feat: prioritize interactive GitHub reads"`
 
 ### Task 6: Add explicit freshness and foreground revalidation
 
@@ -108,12 +108,25 @@
 - Modify: `src/hooks/useSocial.ts`, `useOpenPrs.ts`, `useQueue.ts`, `useTasks.ts`, `usePeople.ts`, `useActivity.ts`, `useHost.ts`
 - Add: freshness/resource-policy tests
 
-- [ ] **Step 1: Write policy tests for fresh, stale, offline, forbidden, and foreground-resume cases.** Use a fake clock; assert one fresh cache hit avoids a read and an expired entry starts exactly one revalidation while preserving the last good value.
-- [ ] **Step 2: Run the focused freshness tests.** Expected: active resources currently remain fresh indefinitely because no caller supplies `staleAfterMs`.
-- [ ] **Step 3: Define named freshness by resource domain.** Use constants near domain hooks (for example inbox, work queue, profile, and PR detail); separate stable resource identity from `enabled`/focused state. On app foreground, refresh only expired or explicitly invalidated resources. Do not poll hidden screens.
-- [ ] **Step 4: Test quick tab switch, long background, rate limit, revoked token, and manual refresh.** Assert age and failure state remain visible with stale content only where policy allows.
-- [ ] **Step 5: Run all read tests, typecheck, lint; commit.** `git add src/hooks src/lib && git commit -m "feat: define resource freshness policies"`
+- [x] **Step 1: Write policy tests for fresh, stale, offline, forbidden, and foreground-resume cases.** Use a fake clock; assert one fresh cache hit avoids a read and an expired entry starts exactly one revalidation while preserving the last good value.
+- [x] **Step 2: Run the focused freshness tests.** Expected: active resources currently remain fresh indefinitely because no caller supplies `staleAfterMs`.
+- [x] **Step 3: Define named freshness by resource domain.** Use constants near domain hooks (for example inbox, work queue, profile, and PR detail); separate stable resource identity from `enabled`/focused state. On app foreground, refresh only expired or explicitly invalidated resources. Do not poll hidden screens.
+- [x] **Step 4: Test quick tab switch, long background, rate limit, revoked token, and manual refresh.** Assert age and failure state remain visible with stale content only where policy allows.
+- [x] **Step 5: Run all read tests, typecheck, lint; commit.** `git add src/hooks src/lib && git commit -m "feat: define resource freshness policies"`
 
 ## Verification
 
 Run after the workstream: `bun run typecheck`, `bun run lint`, and `bun test`. These verify TypeScript, lint, and current public/pure test seams; they do not prove native frame time or memory. Use the release measurement plan for those claims.
+
+## Status (2026-10-25)
+
+Tasks 1–6 are implemented and committed on `perf/audit-fixes` (`66d03e2`
+immutable snapshots, `f95a5dc` atomic invalidation, `26d7597` hydration races,
+`9a434bc` body deadlines, `c97a046` background priority, `0513854` freshness
+policies). `resourceStore.test.ts` and the transport tests cover snapshot
+identity, generation-guarded completion, invalidation during a flight, and
+stalled-body timeouts.
+
+Task 3 Step 4 is the one open step: the inner schema/version of every durable
+cache payload is not yet audited and validated beyond the envelope, so the
+box stays unchecked. No native frame-time or memory claim is made here.

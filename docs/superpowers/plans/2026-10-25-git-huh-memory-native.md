@@ -79,3 +79,22 @@
 ## Verification
 
 Run targeted tests and Android build for native changes. Report byte budgets and before/after allocation measurements; JS heap snapshots alone do not account for native bitmap memory.
+
+## Status (2026-10-25)
+
+- Task 1 (store budget and migration): committed (`c848588 fix: bound cache index
+  and store metadata`); the byte/count measurement (Step 1) is device work.
+- Task 2 (cache identity): committed (`448956a fix: strengthen persisted resource
+  identity`); SHA-256 replaces the 32-bit FNV credential name, checked against the
+  published empty and "abc" vectors.
+- Task 3 (payload/file/diff budgets): partial. Response and patch reads are
+  bounded, but large-file/base64/line allocations are not profiled, so Steps
+  1 and 3–5 have no evidence.
+- Task 4 (widget bitmap budget): committed (`c614b1b fix: enforce widget bitmap
+  memory budget`); reasoned and JVM-tested, but `./gradlew assembleRelease` was
+  not run.
+- Task 5 (host client lifecycle): committed (`5717c05 refactor: extract host
+  connection lifecycle rules`); the construction/persistence/backoff measurement
+  (Step 1) is device work. No sample ring or delta protocol was added.
+
+No native memory or allocation result is claimed without a device.

@@ -95,3 +95,23 @@
 ## Verification
 
 Run focused tests for changed seams, then `bun run typecheck`, `bun run lint`, and `bun test`. Repeat render and frame measurements in release builds; development Profiler output is diagnostic only.
+
+## Status (2026-10-25)
+
+- Task 2 (Today rows): committed (`9d52fca perf: stabilize Today feed updates`); the
+  Profiler capture and the before/after render-count comparison (Steps 1 and 5)
+  are device work and remain open.
+- Task 3 (eventual retries): done. `noteCreated`/`wasJustCreated` and
+  `eventually(..., { recent: true })` restrict retries to a just-created object;
+  `usePullDetail` retries only the core read, and the release create retries only
+  the propagation read and aborts it when the form is left.
+- Task 6 (day-derived state): done. `day.ts` + `triage.test.ts` cover local
+  midnight, daylight-saving, timezone change and foreground resume.
+- Task 7 (truthful stale failures): done for supplemental reads via
+  `optionalRead` + `optionalRead.test.ts`; cross-screen account-switch
+  verification (Step 3) remains.
+- Tasks 1, 4 and 5 (session subscription split, list completeness, overlay
+  eviction): not completed in this workstream.
+
+Render, frame-time and memory results are not claimed: this workstream's
+acceptance criteria require release builds and devices.
