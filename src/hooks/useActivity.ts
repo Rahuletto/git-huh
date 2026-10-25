@@ -39,7 +39,7 @@ export function useActivity(
   );
   const remote = useRemote(
     active && token && login ? `${token}|${login}|${viewerId ?? ''}` : null,
-    (signal) => fetchActivity(token ?? '', login ?? '', signal, viewerId),
+    (signal) => fetchActivity(token ?? '', login ?? '', signal, viewerId, 'background'),
     {
       cacheKey: login && token !== DEMO_TOKEN ? `${login.toLowerCase()}-activity-v2` : null,
       demo,

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { rememberPull, rememberedPull } from './pullRequest';
+import type { RequestPriority } from './rateLimit';
 import { rest } from './rest';
 
 export interface PullRequest {
@@ -34,11 +35,13 @@ export async function fetchOpenPrs(
   token: string,
   login: string,
   signal?: AbortSignal,
+  priority: RequestPriority = 'interactive',
 ): Promise<PullRequest[]> {
   const query = encodeURIComponent(`is:pr is:open author:${login}`);
   const data = await rest(token, `/search/issues?q=${query}&sort=created&order=desc&per_page=20`, {
     schema: searchSchema,
     signal,
+    priority,
   });
   return data.items.map((item) => {
     const repo = repoOf(item.repository_url);

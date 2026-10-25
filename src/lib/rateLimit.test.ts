@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { z } from 'zod';
 
-import { GitHubError } from './github';
+import { executeQuery, GitHubError } from './github';
 import { clearCooldown, cooldownRemaining, maySend, noteRateLimit } from './rateLimit';
 import { rest } from './rest';
 
@@ -67,6 +68,28 @@ test('a cooldown expires, so background work may leave again', () => {
   clearCooldown(token);
 });
 
+test('an interactive read during a cooldown still reaches the network', async () => {
+  clearCooldown(token);
+  noteRateLimit(token, Date.now() + 60_000);
+  const original = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = async () => {
+    calls += 1;
+    return new Response(JSON.stringify({ ok: true }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+  };
+  try {
+    const body = await rest(token, '/interactive', { priority: 'interactive', revalidate: false });
+    assert.deepEqual(body, { ok: true });
+    assert.equal(calls, 1);
+  } finally {
+    globalThis.fetch = original;
+    clearCooldown(token);
+  }
+});
+
 test('a background request during a cooldown does not reach the network', async () => {
   clearCooldown(token);
   noteRateLimit(token, Date.now() + 60_000);
@@ -83,6 +106,42 @@ test('a background request during a cooldown does not reach the network', async 
       return true;
     });
     assert.equal(calls, 0);
+  } finally {
+    globalThis.fetch = original;
+    clearCooldown(token);
+  }
+});
+
+test('a background GraphQL read waits out a cooldown and leaves after it expires', async () => {
+  clearCooldown(token);
+  noteRateLimit(token, Date.now() + 60_000);
+  const original = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = async () => {
+    calls += 1;
+    return new Response(JSON.stringify({ data: { viewer: { login: 'ada' } } }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+  };
+  const schema = z.object({ viewer: z.object({ login: z.string() }) });
+  try {
+    await assert.rejects(
+      executeQuery(token, 'query { viewer { login } }', schema, { priority: 'background' }),
+      (error: unknown) => {
+        assert.ok(error instanceof GitHubError);
+        assert.equal(error.outcome, 'rate-limited');
+        return true;
+      },
+    );
+    assert.equal(calls, 0);
+    clearCooldown(token);
+    noteRateLimit(token, Date.now() - 1);
+    const body = await executeQuery(token, 'query { viewer { login } }', schema, {
+      priority: 'background',
+    });
+    assert.equal(body.viewer.login, 'ada');
+    assert.equal(calls, 1);
   } finally {
     globalThis.fetch = original;
     clearCooldown(token);

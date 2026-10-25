@@ -17,6 +17,7 @@ import {
   type WorkSlice,
 } from '../lib/github';
 import { toGitHubModel, type GitHubModel } from '../lib/contributions';
+import type { RequestPriority } from '../lib/rateLimit';
 import { keyOf, readSaved, writeSaved, type Saved } from '../lib/store';
 import { DEMO_TOKEN } from '../lib/token';
 import { useRemote } from './useRemote';
@@ -91,20 +92,24 @@ function keep(error: unknown): undefined {
  * here — opening a year does that — so a secondary account cannot stall on
  * twelve calendars.
  */
-export async function loadModel(token: string, signal: AbortSignal): Promise<GitHubModel> {
-  const rolling = await loadRolling(token, signal);
+export async function loadModel(
+  token: string,
+  signal: AbortSignal,
+  priority: RequestPriority = 'interactive',
+): Promise<GitHubModel> {
+  const rolling = await loadRolling(token, signal, priority);
   const stats = pendingStats();
   const login = rolling.contributions.login;
   const [today, work, repos] = await Promise.all([
-    fetchToday(token, login, signal).catch((error: unknown) => {
+    fetchToday(token, login, signal, new Date(), priority).catch((error: unknown) => {
       keep(error);
       return failedSlice(undefined, EMPTY_TODAY);
     }),
-    fetchWork(token, signal).catch((error: unknown) => {
+    fetchWork(token, signal, priority).catch((error: unknown) => {
       keep(error);
       return failedSlice(undefined, EMPTY_WORK);
     }),
-    fetchRepos(token, signal).catch((error: unknown) => {
+    fetchRepos(token, signal, priority).catch((error: unknown) => {
       keep(error);
       return failedSlice(undefined, EMPTY_REPOS);
     }),
@@ -112,8 +117,12 @@ export async function loadModel(token: string, signal: AbortSignal): Promise<Git
   return withSlice(rolling, { ...stats, today, work, repos });
 }
 
-export async function loadRolling(token: string, signal: AbortSignal): Promise<Rolling> {
-  const contributions = await fetchContributions(token, signal);
+export async function loadRolling(
+  token: string,
+  signal: AbortSignal,
+  priority: RequestPriority = 'interactive',
+): Promise<Rolling> {
+  const contributions = await fetchContributions(token, signal, priority);
   return { contributions, savedAt: null };
 }
 
@@ -154,7 +163,7 @@ export function useContributions(
   const cacheKey = cacheKeyFor(token);
   const remote = useRemote(
     token,
-    (signal) => loadRolling(token ?? '', signal),
+    (signal) => loadRolling(token ?? '', signal, 'background'),
     {
       cacheKey: null,
       demo: demo ? { contributions: rollingFromDemo(demo), savedAt: null } : undefined,
@@ -229,9 +238,9 @@ export function useContributions(
         }
       }
     };
-    void run('today', EMPTY_TODAY, () => fetchToday(token, login, signal));
-    void run('work', EMPTY_WORK, () => fetchWork(token, signal));
-    void run('repos', EMPTY_REPOS, () => fetchRepos(token, signal));
+    void run('today', EMPTY_TODAY, () => fetchToday(token, login, signal, new Date(), 'background'));
+    void run('work', EMPTY_WORK, () => fetchWork(token, signal, 'background'));
+    void run('repos', EMPTY_REPOS, () => fetchRepos(token, signal, 'background'));
     return () => controller.abort();
   }, [apply, login, token, tokenKey]);
 
@@ -240,7 +249,7 @@ export function useContributions(
     if (stats.archive.status === 'ready') return;
     archiveAsked.current = tokenKey;
     const controller = new AbortController();
-    fetchArchive(token, rolling.contributions.years, controller.signal)
+    fetchArchive(token, rolling.contributions.years, controller.signal, 'background')
       .then((slice) => apply('archive', slice))
       .catch((error: unknown) => {
         archiveAsked.current = null;

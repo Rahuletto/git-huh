@@ -16,7 +16,7 @@ export function usePeople(
   const demo = useMemo(() => (token === DEMO_TOKEN ? demoPeople() : undefined), [token]);
   return useRemote(
     active && token && login ? `${token}|${login}` : null,
-    (signal) => fetchPeople(token ?? '', login ?? '', signal),
+    (signal) => fetchPeople(token ?? '', login ?? '', signal, new Date(), 'background'),
     {
       cacheKey: login && token !== DEMO_TOKEN ? `${login.toLowerCase()}-people` : null,
       demo,

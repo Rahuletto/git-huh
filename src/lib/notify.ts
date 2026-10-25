@@ -161,10 +161,12 @@ async function checkInbox(): Promise<number> {
   if (!token || token === DEMO_TOKEN) return 0;
 
   const accounts = await accountStore.list();
-  const login = accounts.find((account) => account.token === token)?.login ?? (await verifyToken(token));
+  const login =
+      accounts.find((account) => account.token === token)?.login ??
+      (await verifyToken(token, 'background'));
 
   const [events, marks, seenSaved] = await Promise.all([
-    fetchSocial(token, login),
+    fetchSocial(token, login, undefined, 'background'),
     loadMarks(login),
     readSeen(login),
   ]);

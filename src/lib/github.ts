@@ -9,6 +9,8 @@ import {
   type ResponseBudget,
 } from './requestBudget';
 
+export type { RequestPriority };
+
 const ENDPOINT = 'https://api.github.com/graphql';
 
 /**
@@ -536,8 +538,12 @@ export function plausibleYears(
 export function fetchContributions(
   token: string,
   signal?: AbortSignal,
+  priority: RequestPriority = 'interactive',
 ): Promise<Contributions> {
-  return executeQuery(token, CONTRIBUTIONS_QUERY, contributionsSchema, signal).then(
+  return executeQuery(token, CONTRIBUTIONS_QUERY, contributionsSchema, {
+    signal,
+    priority,
+  }).then(
     ({ viewer }) => ({
       id: viewer.id,
       login: viewer.login,
@@ -645,6 +651,7 @@ export function fetchToday(
   login: string,
   signal?: AbortSignal,
   now: Date = new Date(),
+  priority: RequestPriority = 'interactive',
 ): Promise<Slice<TodaySlice>> {
   const todayStart = `${now.toISOString().slice(0, 10)}T00:00:00Z`;
   const query = /* GraphQL */ `
@@ -660,7 +667,7 @@ export function fetchToday(
       }
     }
   `;
-  return executeQuery(token, query, todaySchema, signal).then((data) =>
+  return executeQuery(token, query, todaySchema, { signal, priority }).then((data) =>
     ready({
       todayCommits:
         data.today.contributionsCollection.totalCommitContributions +
@@ -674,6 +681,7 @@ export function fetchToday(
 export function fetchWork(
   token: string,
   signal?: AbortSignal,
+  priority: RequestPriority = 'interactive',
 ): Promise<Slice<WorkSlice>> {
   const query = /* GraphQL */ `
     query Work {
@@ -684,7 +692,7 @@ export function fetchWork(
       }
     }
   `;
-  return executeQuery(token, query, workSchema, signal).then((data) =>
+  return executeQuery(token, query, workSchema, { signal, priority }).then((data) =>
     ready({
       followers: data.social.followers.totalCount,
       following: data.social.following.totalCount,
@@ -700,6 +708,7 @@ export function fetchWork(
 export function fetchRepos(
   token: string,
   signal?: AbortSignal,
+  priority: RequestPriority = 'interactive',
 ): Promise<Slice<ReposSlice>> {
   const query = /* GraphQL */ `
     query Repos {
@@ -728,7 +737,7 @@ export function fetchRepos(
       }
     }
   `;
-  return executeQuery(token, query, reposSchema, signal).then((data) => {
+  return executeQuery(token, query, reposSchema, { signal, priority }).then((data) => {
     const repos = toRepos(data.repos.repositories.nodes);
     return ready({
       stars: repos.reduce((sum, repo) => sum + repo.stargazerCount, 0),
@@ -745,6 +754,7 @@ export function fetchArchive(
   token: string,
   years: number[],
   signal?: AbortSignal,
+  priority: RequestPriority = 'interactive',
 ): Promise<Slice<ArchiveSlice>> {
   const recentYears = recentContributionYears(years);
   if (recentYears.length === 0) return Promise.resolve(ready(EMPTY_ARCHIVE));
@@ -756,7 +766,7 @@ export function fetchArchive(
     token,
     `query Archive { ${parts.join(' ')} }`,
     z.object({}).catchall(yearBucketSchema),
-    signal,
+    { signal, priority },
   ).then((data) => {
     let totalCommits = 0;
     let totalPrivate = 0;
@@ -815,7 +825,15 @@ export async function fetchStats(
 export async function fetchTokenScopes(
   token: string,
   signal?: AbortSignal,
+  priority: RequestPriority = 'interactive',
 ): Promise<string[] | null> {
+  if (!maySend(token, priority)) {
+    throw new GitHubError(
+      'api',
+      'GitHub is rate-limiting this account. Waiting for the window to pass.',
+      'rate-limited',
+    );
+  }
   try {
     const response = await fetch('https://api.github.com/user', {
       headers: {
@@ -844,7 +862,10 @@ export function seesPrivateWork(scopes: string[] | null): boolean | null {
 }
 
 /** Cheap liveness check used before persisting a new token. */
-export async function verifyToken(token: string): Promise<string> {
-  const { viewer } = await executeQuery(token, VERIFY_QUERY, verifySchema);
+export async function verifyToken(
+  token: string,
+  priority: RequestPriority = 'interactive',
+): Promise<string> {
+  const { viewer } = await executeQuery(token, VERIFY_QUERY, verifySchema, { priority });
   return viewer.login;
 }

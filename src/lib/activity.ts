@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 import { toISODate } from './contributions';
-import { executeQuery } from './github';
+import { executeQuery, type RequestPriority } from './github';
 import { PULL_SUMMARY_FIELDS, pullSummarySchema, rememberPull, toPullSummary, type PullSummary } from './pullRequest';
 import type { CommitLine } from './messageCache';
 
@@ -183,13 +183,12 @@ export async function fetchActivity(
   login: string,
   signal?: AbortSignal,
   viewerId?: string | null,
+  priority: RequestPriority = 'interactive',
 ): Promise<Activity> {
-  const data = await executeQuery(
-    token,
-    query(login, viewerId ?? null),
-    activitySchema,
+  const data = await executeQuery(token, query(login, viewerId ?? null), activitySchema, {
     signal,
-  );
+    priority,
+  });
 
   const commits: CommitSample[] = [];
   for (const repo of data.repos.repositories.nodes) {

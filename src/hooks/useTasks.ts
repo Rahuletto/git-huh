@@ -16,7 +16,7 @@ export function useTasks(
   const demo = useMemo(() => (token === DEMO_TOKEN ? demoTasks() : undefined), [token]);
   return useRemote(
     active && token && login ? `${token}|${login}` : null,
-    (signal) => fetchTasks(token ?? '', login ?? '', signal),
+    (signal) => fetchTasks(token ?? '', login ?? '', signal, 'background'),
     {
       cacheKey: login && token !== DEMO_TOKEN ? `${login.toLowerCase()}-tasks` : null,
       demo,

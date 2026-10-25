@@ -30,7 +30,7 @@ export function useSocial(
   );
   const remote = useRemote(
     active && token && login ? `${token}|${login}` : null,
-    (signal) => fetchSocial(token ?? '', login ?? '', signal),
+    (signal) => fetchSocial(token ?? '', login ?? '', signal, 'background'),
     {
       cacheKey: login && token !== DEMO_TOKEN ? `${login.toLowerCase()}-social` : null,
       demo,

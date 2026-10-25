@@ -82,7 +82,7 @@ export function useTogether(
         const saved = await readSaved<GitHubModel>(cacheKey);
         if (saved && Date.now() - saved.at < FRESH_MS) return saved.value;
         try {
-          const model = await loadModel(account.token, signal);
+          const model = await loadModel(account.token, signal, 'background');
           // Same key the account uses when it is the one in front, so turning
           // it on later finds a year already saved.
           writeSaved(cacheKey, model).catch(() => {});
@@ -114,7 +114,7 @@ export function useTogether(
     key && activityWanted ? key : null,
     (signal) =>
       mapLimited(others, ACCOUNT_LANES, (account) =>
-        fetchActivity(account.token, account.login, signal).catch((error: unknown) => {
+        fetchActivity(account.token, account.login, signal, null, 'background').catch((error: unknown) => {
           if (error instanceof Error && error.name === 'AbortError') throw error;
           return EMPTY_ACTIVITY;
         }),

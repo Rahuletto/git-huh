@@ -30,7 +30,7 @@ export function useOpenPrs(
   );
   const remote = useRemote(
     active && token && login ? `${token}|${login}` : null,
-    (signal) => fetchOpenPrs(token ?? '', login ?? '', signal),
+    (signal) => fetchOpenPrs(token ?? '', login ?? '', signal, 'background'),
     {
       cacheKey: login && token !== DEMO_TOKEN ? `${login.toLowerCase()}-prs` : null,
       demo,

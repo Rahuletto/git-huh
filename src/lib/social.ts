@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { executeQuery } from './github';
+import { executeQuery, type RequestPriority } from './github';
 
 /**
  * The social half of GitHub: who replied to you, who reviewed you, who
@@ -294,8 +294,9 @@ export async function fetchSocial(
   token: string,
   login: string,
   signal?: AbortSignal,
+  priority: RequestPriority = 'interactive',
 ): Promise<SocialEvent[]> {
-  const data = await executeQuery(token, query(login), socialSchema, signal);
+  const data = await executeQuery(token, query(login), socialSchema, { signal, priority });
   const me = login.toLowerCase();
   const events = new Map<string, SocialEvent>();
 

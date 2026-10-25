@@ -16,7 +16,7 @@ export function useQueue(
   const demo = useMemo(() => (token === DEMO_TOKEN ? demoQueue() : undefined), [token]);
   return useRemote(
     active && token && login ? `${token}|${login}` : null,
-    (signal) => fetchQueue(token ?? '', login ?? '', signal),
+    (signal) => fetchQueue(token ?? '', login ?? '', signal, 'background'),
     {
       cacheKey: login && token !== DEMO_TOKEN ? `${login.toLowerCase()}-queue` : null,
       demo,
